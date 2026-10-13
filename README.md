@@ -7,7 +7,7 @@ OpenCode, pi and any other agent that reads skills.
 <!-- skills:start -->
 | Skill | What it does |
 | --- | --- |
-| [`product-demo-video`](skills/product-demo-video/SKILL.md) | Turn a screen recording into an auto-playing product demo page to narrate in Loom, plus a rendered MP4 with music. |
+| [`product-demo-video`](skills/product-demo-video/SKILL.md) | Turn a screen recording into an auto-playing product demo page (7 styles, 4 tempos) to narrate in Loom, plus an MP4 with music. |
 <!-- skills:end -->
 
 ## Install

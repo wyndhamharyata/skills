@@ -1,23 +1,29 @@
 // demo.config.js — everything the page shows. Times are in seconds.
 // Worked example: "Reader Hero", a web-novel reader recorded on a Mac (app window + Finder).
 window.DEMO = {
-  brand: {name: 'Reader Hero', tag: 'Web novel reader', accent: '#22A863', accentHi: '#5FE3A1', bg: '#050C09', muted: '#A0B5AA'},
-  // logo: 'logo.png',   // optional; without it a monogram of the first letter is drawn
+  brand: {name: 'Reader Hero', tag: 'Web novel reader', accent: '#22A863'},
+  // brand.logo: 'logo.png'           // optional; without it a monogram of the first letter is drawn
 
-  stage: {w: 1920, h: 1248},          // match the recording's aspect (3600x2338 → 1920x1248)
+  style: 'midnight',   // midnight | paper | aurora | keynote | swiss | pop | terminal  (see references/styles.md)
+  tempo: 'steady',     // calm | steady | brisk | fast, or {preset: 'fast', rate: 1} to override one setting
+  // stamp: 'Live demo',              // pop style only: the round sticker text; false hides it
+
+  stage: {w: 1920, h: 1248},          // the screen the page is played on (1920x1248 suits a MacBook; 1920x1080 for 16:9)
   frame: {type: 'mac', aspect: 1782 / 2180, title: 'Reader Hero'},   // 'mac' | 'phone' | 'none'; aspect = clip width / height
 
   intro: {
-    title: 'Meet Reader Hero',
+    title: 'Meet Reader Hero',        // the brand name inside it is highlighted where the style does that
     sub: 'Read long web novels without losing the thread.',
     cutouts: ['covers/a.png', 'covers/b.png', 'covers/c.png', 'covers/d.png', 'covers/e.png', 'covers/f.png'],
     cutoutWidth: 240,
-    end: 5.4,                         // chapter 1 starts here
+    end: 5.4,                         // chapter 1 starts here (scaled by the tempo)
+    // command: 'open reader-hero',   // terminal style only: the command typed above the title
   },
 
   // Steps: ['hold', clipTime, seconds] | ['play', fromClipTime, toClipTime, rate?]
-  // Cams:  [clipTime, offsetSeconds, scale, focusX, focusY, easeSeconds]   focus is 0–1 inside the app frame
+  // Cams:  [clipTime, offsetSeconds, scale, focusX, focusY, easeSeconds]   focus is 0–1 inside the clip
   // Chips: [clipTime, offsetSeconds, text, endClipTime?]
+  // The tempo scales holds, offsets, play rates and ease times, so write them for 'steady'.
   chapters: [
     {label: 'Open', title: 'Your Mac’s PDF reader', clip: '01-library-open.mp4',
       body: 'Double-click any PDF in Finder. Reader Hero adds it to your library and opens it, ready to read.',
@@ -43,12 +49,13 @@ window.DEMO = {
 
   // Extra windows that play alongside a chapter, e.g. Finder for an "open from the OS" moment.
   // The overlay clip must start at the same source second as the chapter clip so both share clip time.
-  // rect = [left, top, width] in stage px; push = [clipTime, seconds, extraScale]; outAt = clip time it fades away.
+  // at = overlay centre as fractions of the app frame (so it follows the frame in every style); width in px;
+  // push = [clipTime, seconds, extraScale]; outAt = clip time it fades away.
   overlays: [
-    {clip: '00-finder.mp4', chapter: 0, rect: [850, 300, 900], aspect: 1784 / 1176, origin: '0 71%', push: [.2, 1.9, .1], outAt: 2.75},
+    {clip: '00-finder.mp4', chapter: 0, at: [.44, .475], width: 900, aspect: 1784 / 1176, origin: '0 71%', push: [.2, 1.9, .1], outAt: 2.75},
   ],
 
-  outro: {title: 'Reader Hero', sub: 'Read more. Remember all of it.', hold: 6},
+  outro: {title: 'Reader Hero', sub: 'Read more. Remember all of it.'},   // hold: seconds, default set by the tempo
   // duration: 90,                    // optional fixed length; extra time goes to the outro
   music: {src: 'music.m4a', volume: .35},
 };

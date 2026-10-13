@@ -1,17 +1,21 @@
 ---
 name: product-demo-video
-description: Turn a raw screen recording (Mac app, web app or phone simulator) into a polished product demo, meaning an auto-advancing webpage with chapter captions, camera zooms and cut-out UI that the user narrates over in Loom, plus a rendered H.264 MP4 and optional free background music. Use this whenever someone wants to edit, trim, cut dead air from, speed up, zoom into or "make a demo/promo/walkthrough video" from a screen recording (.mov or .mp4), wants something like a polished launch or feature video, or mentions recording Loom over a demo page, even if they don't say "skill" or "webpage".
+description: Turn a raw screen recording (Mac app, web app or phone simulator) into a polished product demo, meaning an auto-advancing webpage with chapter captions, camera zooms and cut-out UI that the user narrates over in Loom, plus a rendered H.264 MP4 and optional free background music. Seven looks (dark, editorial, gradient, keynote, Swiss, playful, terminal/code-editor) and four tempos from calm to fast. Use this whenever someone wants to edit, trim, cut dead air from, speed up, zoom into or "make a demo/promo/walkthrough video" from a screen recording (.mov or .mp4), wants something like a polished launch or feature video, or mentions recording Loom over a demo page, even if they don't say "skill" or "webpage".
 metadata:
-  short-description: Turn a screen recording into an auto-playing product demo page to narrate in Loom, plus a rendered MP4 with music.
+  short-description: Turn a screen recording into an auto-playing product demo page (7 styles, 4 tempos) to narrate in Loom, plus an MP4 with music.
 compatibility: Needs ffmpeg, ImageMagick 7, Python 3 with Pillow, Node 18+ with playwright-core, and Chromium or Google Chrome. Run scripts/doctor.sh to check.
 ---
 
 # Product demo video from a screen recording
 
-The result is a dark, branded stage. A left column holds chapter steps, a caption and short "chips".
-The product plays on the right inside a Mac window or phone frame, and a camera eases in on what the user is
-doing. There's an intro (title, plus cut-out UI fanned above it) and an outro. The page plays automatically,
-so the user can record a Loom with their face and voice on top. The same page renders, frame-exact, to an MP4.
+The result is a branded stage: chapter steps, a caption and short "chips" sit beside the product, which plays
+inside a Mac window, phone or editor pane while a camera eases in on what the user is doing. There's an intro
+(title, plus cut-out UI) and an outro. The page plays automatically, so the user can record a Loom with their
+face and voice on top. The same page renders, frame-exact, to an MP4.
+
+Two settings change the feel without touching the content. The **style** sets the look and layout (seven,
+from a dark launch look to a code-editor look). The **tempo** sets the pace, from calm to fast. Let the user
+choose both from stills of their own footage (step 5).
 
 This approach exists because the obvious one, ffmpeg zoompan with highlight boxes drawn over the UI, looked
 amateur and was rejected. Captions beside the product, plus a camera that frames the action, look like a real
@@ -30,9 +34,10 @@ such as `<project>/demo/`, with `page/`, `output/` and `render/` inside it.
 | `scripts/cutout.py` | Background-removed PNG of a UI element (rounded alpha) for the intro |
 | `assets/demo-template.html` | The page engine. Copy it to `page/index.html`; never edit content into it |
 | `assets/example.config.js` | A complete worked config. Copy it to `page/demo.config.js` and rewrite it |
-| `scripts/render.mjs` | Headless Chromium render to MP4, or `--stills t1,t2` for checks, or `--timeline` |
+| `scripts/render.mjs` | Headless Chromium render to MP4, `--stills t1,t2` for checks, `--timeline` for chapter times; `--style`/`--tempo` override the config, and `--stills … --style all` makes a labelled sheet of every style |
 | `scripts/add_music.py` | Trims, fades and normalises a music track; writes `page/music.m4a`; muxes it into the MP4 |
 | `references/page-config.md` | Every config field, timing and camera semantics, and framing rules. **Read it before writing the config** |
+| `references/styles.md` | The 7 styles and 4 tempos: layouts, what each suits, quirks, and how to choose with the user |
 | `references/music.md` | Free-to-use music sources, licences, and how to pick and align a track |
 
 Requirements: ffmpeg, ImageMagick (`magick`), Python 3 with Pillow, and Node with `playwright-core`
@@ -66,8 +71,9 @@ Pick 3–5 chapters. Each is one feature the viewer should remember. Give each:
 
 Write copy only from what is visible in the recording (counts changing, labels, dialogs). Don't invent
 capabilities, and ask the user to check claims like "no spoilers" or "works offline". Prefer plain words.
-Let the content set the length: about 45 s of usable footage gives a page of about 65 s. If the user asks for a
-fixed length (for example 90 s) and the footage is short, say so, and offer longer holds or `duration`.
+Let the content set the length: about 45 s of usable footage gives a page of about 65 s at the steady tempo,
+about 48 s at fast and about 73 s at calm. If the user asks for a fixed length (for example 90 s) and the footage
+is short, say so, and offer a calmer tempo, longer holds or `duration`.
 
 ### 3. Cut the clips
 
@@ -85,19 +91,28 @@ background (montage) before using them.
 ### 5. Build the page
 
 Copy `assets/demo-template.html` → `page/index.html` and `assets/example.config.js` → `page/demo.config.js`.
-Then rewrite the config: brand colours taken from the product, stage aspect, frame type and aspect, chapters,
+Then rewrite the config: brand accent taken from the product, stage size, frame type and aspect, chapters,
 steps, cams, chips, overlays and outro. Follow `references/page-config.md`. Read camera focus points from
-`contact_sheet.py --times … --crop … --grid` sheets of the cut clips, not from guesses.
+`contact_sheet.py --times … --crop … --grid` sheets of the cut clips, not from guesses. Write all timings for
+the `steady` tempo; the other tempos scale them.
+
+**Pick the look with the user.** Unless they already named a style and tempo, render one mid-chapter moment
+in every style (`render.mjs … --stills <t> --style all --stills-dir ../looks`), show them
+`looks/sheet_t_<t>.jpg`, and recommend one or two styles from `references/styles.md` for their product and
+audience. Then ask about pace: calm, steady, brisk or fast. Put both in the config. The template is the same
+for every look, so changing either later is one line and a re-render.
 
 ### 6. Check with stills, then render
 
 1. `node <skill>/scripts/render.mjs ../page/index.html --timeline` (from `render/`) prints chapter times.
-2. Render 8–14 stills at the important moments: each chapter's first zoom, every hold, every overlay hand-off,
-   intro and outro. Make one montage and look at it. Check that:
-   - no zoom cuts the start of text lines;
+2. Render 8–14 stills at the important moments in the chosen style and tempo: each chapter's first zoom, every
+   hold, every overlay hand-off, intro and outro. Times come from `--timeline`, which changes with the tempo.
+   Make one montage and look at it. Check that:
+   - no zoom cuts the start of text lines (in Pop, also that the cropped panel shows the action);
    - the hold shows the intended state (not one frame early);
-   - overlays don't touch the caption;
-   - chips match what's on screen.
+   - overlays and chips don't cover the caption or each other;
+   - chips match what's on screen;
+   - the Loom spot (`--cam` on stills, or **C** live) doesn't hide anything important.
 3. Fix the config and re-check only the stills that changed. Stills take seconds; a full render takes about
    1.5 min per minute of video.
 4. Full render: `node render.mjs ../page/index.html --out ../output/demo-silent.mp4`. Spot-check about 12 frames
@@ -107,12 +122,16 @@ steps, cams, chips, overlays and outro. Follow `references/page-config.md`. Read
 
 Follow `references/music.md`, then:
 `add_music.py --track … --offset … --duration <page duration> --page-out page/music.m4a --video-in output/demo-silent.mp4 --video-out output/demo.mp4`.
+Take the duration and the intro end (for `--offset`) from `--timeline` for the chosen tempo. Match the track to
+the tempo: calmer tracks for calm and steady, about 120 BPM and up for brisk and fast. Re-run it whenever the
+tempo changes, because the length changes.
 Add `music: {src: 'music.m4a', volume: .35}` to the config so the live page plays it too.
 
 ### 8. Hand over
 
 Tell the user, briefly:
 - the MP4 path and specs, and the page path;
+- the style and tempo used, and that they're one line each in the config (or **S** and **T** to try others live);
 - how to record: open the page in Chrome, **F** full screen, **C** camera spot, **Space** play, **M** music.
   Loom only captures the music if computer audio is on;
 - what was cut or sped up, and any copy claims to verify;

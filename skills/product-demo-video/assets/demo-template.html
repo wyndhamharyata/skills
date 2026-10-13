@@ -4,146 +4,455 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Product demo</title>
-<!-- Generic auto-advancing product demo page. All content lives in demo.config.js next to this file. -->
+<!-- Auto-advancing product demo page. All content lives in demo.config.js next to this file.
+     Looks: 7 styles x 4 tempos. Pick them in the config, with ?style=…&tempo=… in the URL, or live with S / T. -->
 <style>
-:root{--bg:#060A14;--ink:#F4F7FF;--muted:#A3AECB;--accent:#2F7BEA;--accent-hi:#6EA8FF;--accent-rgb:47,123,234;--accent-hi-rgb:110,168,255}
+:root{--accent:#2F7BEA}
 *{box-sizing:border-box;margin:0;padding:0}
-html,body{height:100%;background:var(--bg);overflow:hidden}
-body{font-family:-apple-system,BlinkMacSystemFont,"SF Pro Display","Helvetica Neue",Arial,sans-serif;color:var(--ink);-webkit-font-smoothing:antialiased}
+html,body{height:100%;background:#000;overflow:hidden}
+body{-webkit-font-smoothing:antialiased}
 body.playing{cursor:none}
-#stage{position:absolute;left:0;top:0;transform-origin:0 0;overflow:hidden;background:var(--bg)}
-.layer{position:absolute;inset:0;pointer-events:none}
-#dots{background-image:radial-gradient(rgba(255,255,255,.07) 1.3px,transparent 1.6px);background-size:30px 30px;-webkit-mask-image:radial-gradient(ellipse 70% 70% at 62% 50%,#000,transparent 80%);mask-image:radial-gradient(ellipse 70% 70% at 62% 50%,#000,transparent 80%)}
-#vignette{background:radial-gradient(ellipse 78% 74% at 50% 50%,transparent 48%,rgba(0,0,0,.85) 100%)}
 
-#hero{position:absolute;inset:0}
-#cutouts img{position:absolute;left:0;top:0;transform-origin:50% 100%;filter:drop-shadow(0 30px 40px rgba(0,0,0,.55));opacity:0}
-#heroTitle{position:absolute;left:0;right:0;text-align:center;font-size:96px;font-weight:700;letter-spacing:-.035em;line-height:1}
-#heroSub{position:absolute;left:0;right:0;text-align:center;font-size:34px;color:var(--muted);letter-spacing:-.005em}
-
-#brand{position:absolute;left:120px;top:84px;display:flex;align-items:center;gap:16px}
-.logo{width:46px;height:46px;flex:none;border-radius:12px;object-fit:contain}
-.mono{display:flex;align-items:center;justify-content:center;background:var(--accent);color:#fff;font-weight:700;font-size:24px}
-#brand .name{font-size:27px;font-weight:650;letter-spacing:-.01em}
-#brand .tag{font-size:14px;font-weight:600;letter-spacing:.14em;text-transform:uppercase;color:var(--accent-hi);border:1px solid rgba(var(--accent-hi-rgb),.35);border-radius:999px;padding:6px 12px;margin-left:4px}
-#steps{position:absolute;left:120px;top:178px;width:640px;display:grid;gap:16px}
-.step .lbl{font-size:17px;font-weight:600;color:rgba(255,255,255,.4);margin-bottom:12px;letter-spacing:.02em}
-.step .bar{height:4px;border-radius:2px;background:rgba(255,255,255,.12);overflow:hidden}
-.step .fill{height:100%;width:0;background:linear-gradient(90deg,var(--accent),var(--accent-hi));border-radius:2px}
-.step.on .lbl{color:#fff}
-
-.cap{position:absolute;left:120px;top:300px;width:680px}
-.cap>*{opacity:0;will-change:transform,opacity}
-.eyebrow{display:flex;gap:14px;align-items:center;font-size:20px;font-weight:650;letter-spacing:.16em;text-transform:uppercase;color:var(--accent-hi)}
-.eyebrow span{color:rgba(255,255,255,.45)}
-.title{font-size:70px;font-weight:700;letter-spacing:-.025em;line-height:1.06;margin-top:22px}
-.body{font-size:29px;line-height:1.45;color:var(--muted);margin-top:26px;max-width:660px}
-#outro .logo{width:84px;height:84px;display:flex;font-size:44px;border-radius:20px}
-#outro .title{font-size:104px;margin-top:30px}
-#outro .body{font-size:34px}
-.pills{display:flex;gap:12px;margin-top:40px;flex-wrap:wrap}
-.pill{font-size:21px;font-weight:600;padding:12px 20px;border-radius:999px;background:rgba(var(--accent-rgb),.16);border:1px solid rgba(var(--accent-hi-rgb),.35);color:#fff}
-
-.chip{position:absolute;left:120px;max-width:680px;display:flex;align-items:center;gap:14px;padding:16px 22px 16px 16px;border-radius:16px;background:rgba(12,18,28,.9);border:1px solid rgba(var(--accent-hi-rgb),.3);box-shadow:0 20px 50px rgba(0,0,0,.4);font-size:23px;font-weight:560;line-height:1.3;opacity:0;white-space:nowrap}
-.chip i{flex:none;width:30px;height:30px;border-radius:50%;background:var(--accent) url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='white' stroke-width='3' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M5 12.5l4.5 4.5L19 7.5'/%3E%3C/svg%3E") center/16px no-repeat;box-shadow:0 0 0 6px rgba(var(--accent-rgb),.18)}
-
-#winWrap{position:absolute;transform-origin:50% 50%;opacity:0}
-#win{position:absolute;inset:0;overflow:hidden;background:#fff;isolation:isolate}
-#win.mac,#win.none{border-radius:16px;box-shadow:inset 0 0 0 1px rgba(255,255,255,.12),0 0 0 1px rgba(0,0,0,.5),0 50px 110px rgba(0,0,0,.55),0 0 160px rgba(var(--accent-rgb),.2)}
-#win.phone{padding:14px;background:linear-gradient(150deg,#2c313c,#0c0e13 35%,#171a21 70%,#2a2f39);box-shadow:inset 0 0 0 1.5px rgba(255,255,255,.14),0 0 0 1px rgba(0,0,0,.6),0 50px 110px rgba(0,0,0,.55),0 0 160px rgba(var(--accent-rgb),.22)}
-#bar{position:relative;height:44px;background:linear-gradient(#EDEDED,#E3E3E3);border-bottom:1px solid #CFCFCF;display:flex;align-items:center;justify-content:center;font-size:15px;font-weight:600;color:#4B4B4B;z-index:2}
-#win:not(.mac) #bar{display:none}
-#bar .lights{position:absolute;left:18px;top:15px;display:flex;gap:8px}
-#bar .lights b{width:13px;height:13px;border-radius:50%;background:#FF5F57}
-#bar .lights b:nth-child(2){background:#FEBC2E}
-#bar .lights b:nth-child(3){background:#28C840}
-#lens{position:relative;overflow:hidden;background:#F7F7F7}
+/* ===== structure shared by every style ===== */
+#stage{position:absolute;left:0;top:0;transform-origin:0 0;overflow:hidden;
+  --accent-hi:color-mix(in oklab,var(--accent) 55%,white);--accent-lo:color-mix(in oklab,var(--accent) 70%,black);
+  --mono:"SF Mono","JetBrains Mono","Berkeley Mono",Menlo,Consolas,monospace;
+  --serif:"New York",ui-serif,"Iowan Old Style",Charter,Georgia,serif}
+:where(#stage){font-family:-apple-system,BlinkMacSystemFont,"SF Pro Display","Helvetica Neue",Arial,sans-serif}
+.deco{position:absolute;inset:0;pointer-events:none}
+#design{position:absolute;left:0;top:0;width:1920px;height:1248px;transform-origin:0 0}
+#design>*{position:absolute}
+#under,#over,#intro,#caps{inset:0;pointer-events:none}
+#under>*,#over>*{position:absolute}
+.covers{position:absolute;inset:0}
+.covers img{position:absolute;left:0;top:0;height:auto;opacity:0;will-change:transform,opacity}
+.hero-title,.hero-sub,.hero-pre{position:absolute;left:0;right:0;text-align:center;opacity:0}
+.hero-pre{display:none}
+mark{background:none;color:inherit}
+#brand{display:flex;align-items:center;gap:16px}
+.logo{width:46px;height:46px;flex:none;border-radius:12px;background:var(--accent);color:#fff;display:flex;align-items:center;justify-content:center;overflow:hidden}
+.logo img{width:100%;height:100%;object-fit:contain}
+.logo b{font-size:.52em;font-weight:700}
+#steps{display:grid;grid-auto-flow:column;grid-auto-columns:1fr;gap:16px}
+.lbl em{display:none;font-style:normal}
+.track{overflow:hidden}
+.fill{height:100%;width:0}
+.cap{position:absolute;inset:0}
+.cap .col{position:absolute;display:flex;flex-direction:column;align-items:flex-start}
+.text{display:flex;flex-direction:column;align-items:inherit;opacity:0}
+.text>*{will-change:transform,opacity}
+.eyebrow{display:flex;gap:14px;align-items:center}
+.pills{display:flex;flex-wrap:wrap;gap:12px}
+.chips{display:grid;justify-items:start}
+.chip{grid-area:1/1;display:flex;align-items:center;gap:14px;white-space:nowrap;opacity:0}
+.chip i{flex:none;width:30px;height:30px;border-radius:50%;background:var(--accent) url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='white' stroke-width='3' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M5 12.5l4.5 4.5L19 7.5'/%3E%3C/svg%3E") center/16px no-repeat}
+#winWrap{opacity:0}
+#win{position:absolute;inset:0;display:flex;flex-direction:column;overflow:hidden;background:#fff;isolation:isolate}
+#bar{flex:none;position:relative;height:44px;display:flex;align-items:center;justify-content:center;font-size:15px;font-weight:600;color:#4B4B4B;background:linear-gradient(#EDEDED,#E3E3E3);border-bottom:1px solid #CFCFCF;white-space:nowrap}
+#win.phone #bar,#win.none #bar{display:none}
+.lights{position:absolute;left:18px;top:50%;transform:translateY(-50%);display:flex;gap:8px}
+.lights b{width:13px;height:13px;border-radius:50%;background:#FF5F57}
+.lights b:nth-child(2){background:#FEBC2E}
+.lights b:nth-child(3){background:#28C840}
+#lens{flex:1;position:relative;overflow:hidden;background:#F2F2F2}
+#swap{position:absolute;inset:0;transform-origin:50% 50%}
+#zoom{position:absolute;left:0;top:0;transform-origin:0 0}
+#zoom .media{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;opacity:0}
+#win.phone{padding:14px;background:linear-gradient(150deg,#2c313c,#0c0e13 35%,#171a21 70%,#2a2f39)}
 #win.phone #lens{background:#000}
 #island{position:absolute;left:50%;top:14px;width:44%;height:47px;transform:translateX(-50%);border-radius:24px;background:#000;z-index:9;display:none}
 #win.phone #island{display:block}
-#zoom{position:absolute;left:0;top:0;transform-origin:0 0}
-#zoom .media{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;opacity:0}
-
 .overlay{position:absolute;overflow:hidden;background:#fff;box-shadow:0 0 0 1px rgba(0,0,0,.45),0 40px 100px rgba(0,0,0,.6);opacity:0}
 .overlay .media{position:absolute;inset:0;width:100%;height:100%;object-fit:cover}
-
-#cam{position:absolute;left:48px;width:420px;height:420px;border-radius:50%;border:3px dashed rgba(var(--accent-hi-rgb),.7);display:none;align-items:center;justify-content:center;font-size:24px;font-weight:600;color:rgba(var(--accent-hi-rgb),.9);background:rgba(var(--accent-rgb),.08)}
+#cam{left:48px;top:780px;width:420px;height:420px;border-radius:50%;border:4px dashed #FF4D6A;color:#FF4D6A;background:rgba(255,77,106,.08);display:none;align-items:center;justify-content:center;font:700 26px -apple-system,sans-serif;z-index:20}
 body.cam #cam{display:flex}
-#black{background:var(--bg)}
+#black{position:absolute;inset:0;background:var(--bg,#000);pointer-events:none}
 
-#hud{position:fixed;left:50%;bottom:28px;transform:translateX(-50%);display:flex;gap:18px;align-items:center;padding:14px 20px;border-radius:14px;background:rgba(10,14,22,.92);border:1px solid rgba(255,255,255,.14);font-size:14px;color:#C9D3EA;z-index:10;white-space:nowrap}
+/* ===== 1. midnight · text left, app right ===== */
+.st-midnight{--bg:color-mix(in oklab,var(--accent) 7%,#03050A);background:var(--bg);color:#F3F6FA}
+.st-midnight .deco{background:radial-gradient(ellipse 48% 66% at 70% 50%,color-mix(in srgb,var(--accent) 28%,transparent),transparent 70%),radial-gradient(ellipse 40% 45% at 8% 5%,color-mix(in srgb,var(--accent) 10%,transparent),transparent 70%)}
+.st-midnight .deco::before{content:"";position:absolute;inset:0;background-image:radial-gradient(rgba(255,255,255,.07) 1.3px,transparent 1.6px);background-size:30px 30px;-webkit-mask-image:radial-gradient(ellipse 70% 70% at 62% 50%,#000,transparent 80%);mask-image:radial-gradient(ellipse 70% 70% at 62% 50%,#000,transparent 80%)}
+.st-midnight .deco::after{content:"";position:absolute;inset:0;background:radial-gradient(ellipse 78% 74% at 50% 50%,transparent 48%,rgba(0,0,0,.5) 100%)}
+.st-midnight #brand{left:120px;top:84px}
+.st-midnight .name{font-size:27px;font-weight:650;letter-spacing:-.01em}
+.st-midnight .tag{font-size:14px;font-weight:600;letter-spacing:.14em;text-transform:uppercase;color:var(--accent-hi);border:1px solid color-mix(in srgb,var(--accent-hi) 35%,transparent);border-radius:999px;padding:6px 12px;margin-left:4px}
+.st-midnight #steps{left:120px;top:178px;width:640px}
+.st-midnight .lbl{font-size:17px;font-weight:600;color:rgba(255,255,255,.4);margin-bottom:12px}
+.st-midnight .step.on .lbl{color:#fff}
+.st-midnight .track{height:4px;border-radius:2px;background:rgba(255,255,255,.12)}
+.st-midnight .fill{background:linear-gradient(90deg,var(--accent),var(--accent-hi));border-radius:2px}
+.st-midnight .cap .col{left:120px;top:300px;width:680px}
+.st-midnight.wide .cap .col{width:570px}
+.st-midnight .eyebrow{font-size:20px;font-weight:650;letter-spacing:.16em;text-transform:uppercase;color:var(--accent-hi)}
+.st-midnight .eyebrow span{color:rgba(255,255,255,.45)}
+.st-midnight .title{font-size:70px;font-weight:700;letter-spacing:-.025em;line-height:1.06;margin-top:22px}
+.st-midnight.wide .cap .title{font-size:60px}
+.st-midnight .body{font-size:29px;line-height:1.45;color:#A3AEC0;margin-top:26px}
+.st-midnight .chips{margin-top:34px}
+.st-midnight .chip{padding:16px 22px 16px 16px;border-radius:16px;background:rgba(12,18,24,.9);border:1px solid color-mix(in srgb,var(--accent-hi) 30%,transparent);box-shadow:0 20px 50px rgba(0,0,0,.4);font-size:23px;font-weight:560}
+.st-midnight .chip i{box-shadow:0 0 0 6px color-mix(in srgb,var(--accent) 18%,transparent)}
+.st-midnight #win{border-radius:16px;box-shadow:inset 0 0 0 1px rgba(255,255,255,.12),0 0 0 1px rgba(0,0,0,.5),0 50px 110px rgba(0,0,0,.55),0 0 160px color-mix(in srgb,var(--accent) 20%,transparent)}
+.st-midnight #intro{background:radial-gradient(ellipse 760px 380px at 960px 424px,color-mix(in srgb,var(--accent) 38%,transparent),transparent 72%)}
+.st-midnight .covers img{filter:drop-shadow(0 30px 40px rgba(0,0,0,.55))}
+.st-midnight .hero-title{top:730px;font-size:96px;font-weight:700;letter-spacing:-.035em}
+.st-midnight .hero-sub{top:856px;font-size:34px;color:#A3AEC0}
+.st-midnight .outro .logo{width:84px;height:84px;border-radius:20px;font-size:84px}
+.st-midnight .outro .title{font-size:104px;margin-top:30px}
+.st-midnight .outro .body{font-size:34px}
+.st-midnight .pills{margin-top:40px}
+.st-midnight .pill{font-size:21px;font-weight:600;padding:12px 20px;border-radius:999px;background:color-mix(in srgb,var(--accent) 16%,transparent);border:1px solid color-mix(in srgb,var(--accent-hi) 35%,transparent)}
+
+/* ===== 2. paper · app left, text right ===== */
+.st-paper{--bg:#F3F0E8;background:var(--bg);color:#17150F}
+.st-paper .deco{background:radial-gradient(ellipse 52% 64% at 27% 56%,color-mix(in srgb,var(--accent) 10%,transparent),transparent 70%)}
+.st-paper .rule{left:120px;right:120px;top:146px;height:1px;background:#D8D1C1}
+.st-paper #brand{left:120px;top:66px;gap:14px}
+.st-paper .logo{width:44px;height:44px;border-radius:10px;font-size:44px}
+.st-paper .name{font:600 29px var(--serif);letter-spacing:-.01em}
+.st-paper .tag{font-size:15px;color:#8A8475;padding-left:16px;margin-left:4px;border-left:1px solid #D0C9B8}
+.st-paper #steps{right:120px;top:78px;display:flex;gap:40px}
+.st-paper .lbl{font-size:18px;font-weight:600;color:#A39C8B;padding-bottom:10px}
+.st-paper .lbl em{display:inline;font:600 15px var(--mono);margin-right:8px;color:#B8B1A0}
+.st-paper .step.on .lbl,.st-paper .step.on .lbl em{color:#17150F}
+.st-paper .track{height:2px}
+.st-paper .step.on .fill{background:var(--accent);width:100%!important}
+.st-paper .step:not(.on) .fill{width:0!important}
+.st-paper .cap .col{left:1010px;top:330px;width:790px}
+.st-paper.wide .cap .col{left:1300px;width:520px}
+.st-paper .eyebrow{font-size:17px;font-weight:650;letter-spacing:.16em;text-transform:uppercase;color:var(--accent-lo)}
+.st-paper .eyebrow span{color:#8A8475}
+.st-paper .title{font:600 80px/1.04 var(--serif);letter-spacing:-.02em;margin-top:24px}
+.st-paper.wide .cap .title{font-size:62px}
+.st-paper .body{font-size:28px;line-height:1.55;color:#625D52;margin-top:28px;max-width:660px}
+.st-paper .chips{margin-top:40px}
+.st-paper .chip{padding:15px 22px 15px 15px;border-radius:12px;background:#fff;border:1px solid #E2DCCD;box-shadow:0 12px 30px rgba(60,45,20,.08);font-size:22px;font-weight:560}
+.st-paper #win{border-radius:12px;box-shadow:0 0 0 1px rgba(0,0,0,.07),0 2px 4px rgba(60,45,20,.06),0 40px 90px rgba(60,45,20,.2)}
+.st-paper #bar{background:#F8F7F4;border-bottom-color:#E7E3DA;color:#6D685E}
+.st-paper #cam{left:1452px}
+.st-paper .covers img{filter:drop-shadow(0 24px 30px rgba(60,45,20,.28))}
+.st-paper #intro::after{content:"";position:absolute;left:220px;right:220px;top:var(--shelf-y,562px);height:2px;background:#CFC7B5}
+.st-paper .hero-title{top:680px;font:600 104px/1 var(--serif);letter-spacing:-.025em}
+.st-paper .hero-sub{top:812px;font-size:32px;color:#625D52}
+.st-paper .outro .logo{width:76px;height:76px;border-radius:18px;font-size:76px}
+.st-paper .outro .title{font-size:108px;margin-top:30px}
+.st-paper.wide .outro .title{font-size:84px}
+.st-paper .outro .body{font-size:32px}
+.st-paper .pills{margin-top:40px}
+.st-paper .pill{font-size:20px;font-weight:600;padding:11px 20px;border-radius:999px;border:1px solid #CFC8B8;color:#3A362E}
+
+/* ===== 3. aurora · headline on top, app centred, text either side ===== */
+.st-aurora{--bg:#07061A;background:var(--bg);color:#fff}
+.st-aurora .deco::before{content:"";position:absolute;inset:-12%;filter:blur(70px) saturate(1.25);
+  background:radial-gradient(circle at 18% 22%,hsl(from var(--accent) calc(h + 75) s l / .95),transparent 38%),
+             radial-gradient(circle at 78% 34%,var(--accent),transparent 46%),
+             radial-gradient(circle at 58% 92%,hsl(from var(--accent) calc(h - 70) s l / .85),transparent 42%),
+             radial-gradient(circle at 8% 88%,hsl(from var(--accent) calc(h + 150) s l / .55),transparent 36%)}
+.st-aurora .deco::after{content:"";position:absolute;inset:0;background:rgba(6,5,22,.30) url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='220' height='220'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.85' numOctaves='2' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='.10'/%3E%3C/svg%3E")}
+.st-aurora #brand{left:96px;top:56px}
+.st-aurora .logo{box-shadow:0 0 0 1px rgba(255,255,255,.35),0 10px 30px rgba(0,0,0,.25)}
+.st-aurora .name{font-size:27px;font-weight:700}
+.st-aurora .tag{font-size:13px;font-weight:650;letter-spacing:.12em;text-transform:uppercase;padding:7px 13px;border-radius:999px;background:rgba(255,255,255,.14);border:1px solid rgba(255,255,255,.25)}
+.st-aurora #steps{right:96px;top:62px;width:640px;gap:12px}
+.st-aurora .lbl{font-size:16px;font-weight:650;color:rgba(255,255,255,.55);margin-bottom:10px}
+.st-aurora .step.on .lbl{color:#fff}
+.st-aurora .track{height:3px;border-radius:2px;background:rgba(255,255,255,.2)}
+.st-aurora .fill{background:#fff}
+.st-aurora .cap .col{left:0;top:112px;width:1920px;align-items:center;text-align:center}
+.st-aurora .eyebrow{font-size:18px;font-weight:700;letter-spacing:.16em;text-transform:uppercase;color:rgba(255,255,255,.9)}
+.st-aurora .eyebrow span{color:rgba(255,255,255,.55)}
+.st-aurora .title{font-size:68px;font-weight:780;letter-spacing:-.03em;line-height:1.05;margin-top:14px;background:linear-gradient(100deg,#fff 35%,color-mix(in oklab,var(--accent) 45%,white));-webkit-background-clip:text;background-clip:text;color:transparent}
+.st-aurora .cap:not(.outro) .body{position:absolute;left:96px;top:288px;width:440px;text-align:left;font-size:25px;line-height:1.5;color:rgba(255,255,255,.88);padding:34px 38px;border-radius:28px}
+.st-aurora .cap:not(.outro) .body,.st-aurora .outro .text{background:rgba(255,255,255,.10);border:1px solid rgba(255,255,255,.24);-webkit-backdrop-filter:blur(30px) saturate(1.4);backdrop-filter:blur(30px) saturate(1.4);box-shadow:0 30px 80px rgba(0,0,0,.22),inset 0 1px 0 rgba(255,255,255,.25)}
+.st-aurora .chips{position:absolute;left:1384px;top:358px}
+.st-aurora .chip{padding:13px 24px 13px 13px;border-radius:999px;background:rgba(255,255,255,.16);border:1px solid rgba(255,255,255,.3);-webkit-backdrop-filter:blur(20px);backdrop-filter:blur(20px);font-size:22px;font-weight:620;white-space:normal;max-width:440px;text-align:left}
+.st-aurora .chip i{box-shadow:0 0 0 4px rgba(255,255,255,.25)}
+.st-aurora.wide .cap:not(.outro) .body{position:static;width:auto;max-width:1100px;text-align:center;padding:0;background:none;border:0;box-shadow:none;-webkit-backdrop-filter:none;backdrop-filter:none;margin-top:12px;font-size:24px}
+.st-aurora.wide .chips{left:0;width:1920px;top:1034px;justify-items:center}
+.st-aurora #win{border-radius:20px;transform:perspective(2400px) rotateX(6deg);transform-origin:50% 100%;box-shadow:0 0 0 1px rgba(255,255,255,.3),0 70px 140px rgba(0,0,0,.45),0 0 200px color-mix(in srgb,var(--accent) 30%,transparent)}
+.st-aurora #bar{background:rgba(246,246,250,.96)}
+.st-aurora .covers{perspective:1700px;perspective-origin:50% 35%}
+.st-aurora .covers img{filter:drop-shadow(0 40px 50px rgba(0,0,0,.45))}
+.st-aurora .hero-title{top:690px;font-size:112px;font-weight:800;letter-spacing:-.04em;background:linear-gradient(100deg,#fff 30%,color-mix(in oklab,var(--accent) 45%,white) 70%);-webkit-background-clip:text;background-clip:text;color:transparent;width:max-content;margin:0 auto}
+.st-aurora .hero-sub{top:828px;font-size:34px;color:rgba(255,255,255,.8)}
+.st-aurora .outro .col{left:0;top:0;width:1920px;height:1248px;justify-content:center;align-items:center}
+.st-aurora .outro .text{align-items:center;text-align:center;padding:60px 90px 64px;border-radius:40px}
+.st-aurora .outro .logo{width:84px;height:84px;border-radius:20px;font-size:84px}
+.st-aurora .outro .title{font-size:120px;margin-top:28px}
+.st-aurora .outro .body{font-size:34px;color:rgba(255,255,255,.85)}
+.st-aurora .pills{margin-top:36px;justify-content:center}
+.st-aurora .pill{font-size:20px;font-weight:650;padding:11px 20px;border-radius:999px;background:rgba(255,255,255,.14);border:1px solid rgba(255,255,255,.28)}
+
+/* ===== 4. keynote · app centred, headline left, callouts right ===== */
+.st-keynote{--bg:#000;background:var(--bg);color:#F5F5F7}
+.st-keynote .deco{background:radial-gradient(ellipse 57% 56% at 50% -11%,rgba(255,255,255,.11),transparent 70%),radial-gradient(ellipse 40% 9% at 50% 92%,color-mix(in srgb,var(--accent) 26%,transparent),transparent 70%)}
+.st-keynote #brand{left:72px;top:52px;gap:12px}
+.st-keynote .logo{width:36px;height:36px;border-radius:9px;font-size:36px}
+.st-keynote .name{font-size:20px;font-weight:650}
+.st-keynote .tag{display:none}
+.st-keynote #steps{left:50%;top:60px;transform:translateX(-50%);display:flex;gap:34px}
+.st-keynote .track{display:none}
+.st-keynote .lbl{display:flex;align-items:center;gap:10px;font-size:16px;font-weight:600;color:#6E6E73}
+.st-keynote .lbl::before{content:"";width:8px;height:8px;border-radius:50%;background:#3A3A3C}
+.st-keynote .step.done .lbl::before{background:#8E8E93}
+.st-keynote .step.on .lbl{color:#fff}
+.st-keynote .step.on .lbl::before{background:var(--accent);box-shadow:0 0 0 5px color-mix(in srgb,var(--accent) 30%,transparent)}
+.st-keynote #win{border-radius:28px;box-shadow:0 0 0 1px rgba(255,255,255,.16),0 40px 120px rgba(0,0,0,.9),0 0 240px color-mix(in srgb,var(--accent) 16%,transparent)}
+.st-keynote #bar{display:none}
+.st-keynote .cap .col{left:80px;top:140px;height:979px;width:420px;justify-content:center;align-items:flex-end;text-align:right;padding-bottom:170px}
+.st-keynote .eyebrow{font-size:17px;font-weight:650;letter-spacing:.14em;text-transform:uppercase;color:var(--accent-hi)}
+.st-keynote .eyebrow span{color:#86868B}
+.st-keynote .title{font-size:58px;font-weight:700;letter-spacing:-.03em;line-height:1.05;margin-top:18px}
+.st-keynote .body{font-size:24px;line-height:1.45;color:#86868B;margin-top:22px}
+.st-keynote .chips{position:absolute;left:1280px;top:0;height:100%;width:440px;align-content:center;padding-bottom:170px}
+.st-keynote .chip{white-space:normal;padding:20px 24px;border-radius:16px;background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.1);font-size:25px;font-weight:600;line-height:1.3;align-items:flex-start;text-align:left}
+.st-keynote .chip i{width:12px;height:12px;margin-top:10px;background:var(--accent);box-shadow:0 0 0 5px color-mix(in srgb,var(--accent) 25%,transparent)}
+.st-keynote.wide .cap .col{left:0;top:104px;width:1920px;height:auto;align-items:center;text-align:center;padding-bottom:0}
+.st-keynote.wide .cap .title{font-size:52px;margin-top:10px}
+.st-keynote.wide .cap .body{max-width:1100px;margin-top:10px;font-size:22px}
+.st-keynote.wide .chips{left:0;width:1920px;top:1018px;height:auto;padding:0;justify-items:center}
+.st-keynote .hero-title{top:250px;font-size:132px;font-weight:700;letter-spacing:-.045em}
+.st-keynote .hero-sub{top:410px;font-size:34px;color:#86868B}
+.st-keynote .covers{-webkit-mask-image:linear-gradient(90deg,transparent 8%,#000 26%,#000 74%,transparent 92%);mask-image:linear-gradient(90deg,transparent 8%,#000 26%,#000 74%,transparent 92%)}
+.st-keynote .covers img{-webkit-box-reflect:below 6px linear-gradient(transparent 64%,rgba(255,255,255,.22))}
+.st-keynote .outro .col{left:0;top:0;width:1920px;height:1248px;justify-content:center;align-items:center;text-align:center;padding-bottom:60px}
+.st-keynote .outro .logo{width:96px;height:96px;border-radius:24px;font-size:96px}
+.st-keynote .outro .title{font-size:150px;margin-top:34px;letter-spacing:-.045em}
+.st-keynote .outro .body{font-size:38px}
+.st-keynote .pills{margin-top:44px;justify-content:center}
+.st-keynote .pill{font-size:21px;font-weight:600;padding:12px 22px;border-radius:999px;background:rgba(255,255,255,.08);color:#D1D1D6}
+
+/* ===== 5. swiss · colour band on top, app overlapping it ===== */
+.st-swiss{--bg:#ECECE7;background:var(--bg);color:#111;font-family:"Helvetica Neue",Helvetica,Arial,sans-serif}
+.st-swiss .deco::before{content:"";position:absolute;left:0;right:0;top:0;height:calc(var(--oy) + 520px * var(--k));background:var(--accent)}
+.st-swiss #brand{left:80px;top:56px;gap:14px;color:#fff}
+.st-swiss .logo{border-radius:0;background:#111;font-size:46px}
+.st-swiss .name{font-size:26px;font-weight:700;letter-spacing:-.01em}
+.st-swiss .tag{font-size:13px;font-weight:700;letter-spacing:.12em;text-transform:uppercase;opacity:.7}
+.st-swiss #steps{right:80px;top:58px;width:640px;gap:12px}
+.st-swiss .lbl{font-size:14px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:rgba(255,255,255,.6);margin-bottom:10px;white-space:nowrap}
+.st-swiss .lbl em{display:inline;margin-right:6px}
+.st-swiss .step.on .lbl{color:#fff}
+.st-swiss .track{height:3px;background:rgba(255,255,255,.25)}
+.st-swiss .fill{background:#fff}
+.st-swiss .cap .col{left:80px;top:160px;width:880px}
+.st-swiss .eyebrow{position:absolute;left:0;top:0;font-size:220px;font-weight:700;letter-spacing:-.06em;line-height:.8;color:#111}
+.st-swiss .eyebrow span{display:none}
+.st-swiss .cap .title{position:absolute;left:300px;top:4px;width:560px;font-size:76px;font-weight:700;letter-spacing:-.035em;line-height:1;color:#fff}
+.st-swiss .cap .body{position:absolute;left:0;top:420px;width:780px;font-size:28px;line-height:1.45;color:#222}
+.st-swiss .chips{position:absolute;left:0;top:530px}
+.st-swiss .chip{padding:17px 24px;background:#111;color:#fff;font-size:22px;font-weight:600}
+.st-swiss .chip i{display:none}
+.st-swiss .chip::before{content:"→";color:color-mix(in oklab,var(--accent) 50%,white);font-weight:700}
+.st-swiss #win{border-radius:6px;box-shadow:0 0 0 1px rgba(0,0,0,.14),0 30px 70px rgba(0,0,0,.22)}
+.st-swiss #bar{background:#F4F4F2;border-bottom-color:#DDD}
+.st-swiss .hero-title{left:80px;right:auto;width:1760px;top:210px;text-align:left;font-size:168px;font-weight:700;letter-spacing:-.05em;line-height:1;color:#fff}
+.st-swiss .hero-sub{left:80px;right:auto;width:1200px;top:420px;text-align:left;font-size:32px;color:rgba(255,255,255,.9)}
+.st-swiss .covers img{filter:drop-shadow(0 20px 30px rgba(0,0,0,.22))}
+.st-swiss .outro .logo{position:absolute;left:0;top:0;width:84px;height:84px;font-size:84px}
+.st-swiss .outro .title{position:absolute;left:0;top:116px;width:900px;font-size:140px;font-weight:700;letter-spacing:-.055em;line-height:1;color:#fff}
+.st-swiss .outro .body{position:absolute;left:0;top:420px;width:820px;font-size:32px;color:#222}
+.st-swiss .pills{position:absolute;left:0;top:500px}
+.st-swiss .pill{font-size:18px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;padding:12px 18px;border:2px solid #111}
+
+/* ===== 6. pop · recording fills the panel, caption card on top ===== */
+.st-pop{--bg:color-mix(in oklab,var(--accent) 16%,#FFF7E6);background:var(--bg);color:#111}
+.st-pop .deco{background-image:radial-gradient(rgba(17,17,17,.13) 2px,transparent 2.5px);background-size:34px 34px}
+.st-pop #brand{left:60px;top:40px;gap:14px}
+.st-pop .logo{border:3px solid #111;box-shadow:4px 4px 0 #111;font-size:46px}
+.st-pop .name{font-size:28px;font-weight:850}
+.st-pop .tag{font-size:13px;font-weight:800;letter-spacing:.1em;text-transform:uppercase;padding:7px 13px;border-radius:999px;background:#111;color:#fff}
+.st-pop #steps{right:300px;top:30px;width:720px;gap:12px}
+.st-pop .step{padding:10px 14px 12px;border:3px solid #111;border-radius:12px;background:#fff}
+.st-pop .step.on{background:#FFD84A;box-shadow:4px 4px 0 #111}
+.st-pop .lbl{font-size:15px;font-weight:800;margin-bottom:8px;white-space:nowrap}
+.st-pop .track{height:6px;border-radius:3px;background:rgba(0,0,0,.1)}
+.st-pop .fill{background:#111}
+.st-pop #win{border:5px solid #111;border-radius:22px;box-shadow:14px 14px 0 #111}
+.st-pop #bar{height:50px;background:#fff;border-bottom:4px solid #111;color:#111;font-weight:800}
+.st-pop .lights b{border:2px solid #111;width:15px;height:15px}
+.st-pop .stamp{left:1690px;top:24px;width:200px;height:200px;border-radius:50%;background:#FFD84A;border:4px solid #111;box-shadow:6px 6px 0 #111;rotate:12deg;display:flex;align-items:center;justify-content:center;text-align:center;font-size:34px;font-weight:900;line-height:1;letter-spacing:-.02em;text-transform:uppercase}
+.st-pop .cap .col{left:110px;bottom:96px;width:820px}
+.st-pop .text{background:#fff;border:4px solid #111;border-radius:22px;box-shadow:10px 10px 0 #111;padding:34px 40px 40px;rotate:-1.2deg}
+.st-pop .eyebrow{display:inline-flex;align-self:flex-start;font-size:17px;font-weight:800;letter-spacing:.1em;text-transform:uppercase;padding:8px 15px;border-radius:999px;background:#111;color:#fff;gap:10px}
+.st-pop .eyebrow span{color:color-mix(in oklab,var(--accent) 50%,white)}
+.st-pop .title{font-size:72px;font-weight:900;letter-spacing:-.035em;line-height:1;margin-top:22px}
+.st-pop .body{font-size:25px;line-height:1.45;color:#2A2A2A;font-weight:500;margin-top:18px}
+.st-pop .chips{position:absolute;right:-70px;top:-46px}
+.st-pop .chip{padding:14px 22px 14px 14px;border:3px solid #111;border-radius:14px;background:#FFD84A;box-shadow:6px 6px 0 #111;font-size:23px;font-weight:800;rotate:3.5deg}
+.st-pop .chip i{border:2px solid #111}
+.st-pop #cam{left:1452px}
+.st-pop .covers img{filter:drop-shadow(3px 0 0 #111) drop-shadow(-3px 0 0 #111) drop-shadow(0 3px 0 #111) drop-shadow(0 -3px 0 #111) drop-shadow(10px 10px 0 #111)}
+.st-pop .hero-title{top:720px;font-size:124px;font-weight:900;letter-spacing:-.045em}
+.st-pop .hero-title mark{background:linear-gradient(transparent 56%,var(--accent) 56%,var(--accent) 88%,transparent 88%);padding:0 6px}
+.st-pop .hero-sub{top:880px;font-size:34px;font-weight:650;color:#333}
+.st-pop .outro .logo{width:72px;height:72px;border-radius:18px;font-size:72px}
+.st-pop .outro .title{font-size:100px;margin-top:22px}
+.st-pop .outro .body{font-size:30px}
+.st-pop .pills{margin-top:28px}
+.st-pop .pill{font-size:19px;font-weight:800;padding:10px 18px;border-radius:999px;background:#fff;border:3px solid #111;box-shadow:4px 4px 0 #111}
+
+/* ===== 7. terminal · tiled panes: chapters, app, terminal ===== */
+.st-terminal{--bg:#0A0C10;background:var(--bg);color:#E6EDF3;font-family:var(--mono)}
+.st-terminal .deco{background:radial-gradient(ellipse 50% 60% at 42% 50%,color-mix(in srgb,var(--accent) 10%,transparent),transparent 70%)}
+.st-terminal .deco::before{content:"";position:absolute;inset:0;background-image:linear-gradient(rgba(255,255,255,.035) 1px,transparent 1px),linear-gradient(90deg,rgba(255,255,255,.035) 1px,transparent 1px);background-size:48px 48px}
+.st-terminal .deco::after{content:"";position:absolute;inset:0;background:repeating-linear-gradient(0deg,rgba(255,255,255,.022) 0 1px,transparent 1px 4px),radial-gradient(ellipse 80% 80% at 50% 50%,transparent 55%,rgba(0,0,0,.55) 100%);z-index:30}
+.st-terminal .tbar{left:-600px;right:-600px;top:0;height:46px;background:#161B22;border-bottom:1px solid #30363D}
+.st-terminal .tbar .r{position:absolute;right:624px;top:0;line-height:46px;font:500 15px var(--mono);color:#7D8590;white-space:pre}
+.st-terminal .tbar .r b{color:#FF5F57;font-weight:400}
+.st-terminal .pane{background:#0D1117;border:1px solid #30363D;border-radius:10px;overflow:hidden}
+.st-terminal .ph{height:40px;border-bottom:1px solid #30363D;padding:0 16px;display:flex;align-items:center;gap:14px;font:600 13px var(--mono);letter-spacing:.12em;color:#7D8590}
+.st-terminal .ph span{color:#E6EDF3;letter-spacing:0;font-weight:500;padding:0 2px 2px;box-shadow:inset 0 -2px 0 var(--accent)}
+.st-terminal .pt{padding:16px 18px 6px;font:600 16px var(--mono);color:#C9D1D9}
+.st-terminal .p-tree{left:24px;top:70px;width:300px;height:1154px}
+.st-terminal .p-term{left:1266px;top:70px;width:630px;height:1154px}
+.st-terminal.wide .p-tree{width:260px}
+.st-terminal.wide .p-term{left:300px;top:886px;width:1596px;height:338px}
+.st-terminal #brand{left:0;top:0;height:46px;gap:10px;padding:0 40px 0 16px;background:var(--accent);color:#0A0C10;clip-path:polygon(0 0,calc(100% - 18px) 0,100% 50%,calc(100% - 18px) 100%,0 100%);z-index:2}
+.st-terminal #brand .logo{width:28px;height:28px;border-radius:6px;background:#0A0C10;color:var(--accent);font-size:28px}
+.st-terminal .name{font:700 17px var(--mono)}
+.st-terminal .tag{display:none}
+.st-terminal #steps{left:25px;top:142px;width:298px;display:flex;flex-direction:column;gap:2px}
+.st-terminal.wide #steps{width:258px}
+.st-terminal .track{display:none}
+.st-terminal .lbl{position:relative;font:16px var(--mono);color:#7D8590;padding:9px 18px 9px 44px;text-transform:lowercase;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.st-terminal .lbl em{display:inline}
+.st-terminal .lbl em::after{content:"-"}
+.st-terminal .lbl::before{content:"·";position:absolute;left:22px}
+.st-terminal .step.on .lbl{background:color-mix(in srgb,var(--accent) 16%,transparent);color:#fff;box-shadow:inset 2px 0 0 var(--accent)}
+.st-terminal .step.on .lbl::before{content:"▸";color:var(--accent)}
+.st-terminal .step.done .lbl{background:none;box-shadow:none;color:#C9D1D9}
+.st-terminal .step.done .lbl::before{content:"✓";color:var(--accent)}
+.st-terminal #win{border-radius:10px;border:1px solid #30363D;background:#0D1117}
+.st-terminal #lens{background:#0D1117}
+.st-terminal #bar{height:40px;background:#161B22;border-bottom:1px solid #30363D;justify-content:flex-start;padding-left:16px;font:500 14px var(--mono);color:#E6EDF3}
+.st-terminal #bar::before{content:"◉";color:var(--accent);margin-right:10px}
+.st-terminal #bar::after{content:" — preview";color:#7D8590;white-space:pre}
+.st-terminal .lights{display:none}
+.st-terminal .cap .col{left:1290px;top:136px;width:582px}
+.st-terminal.wide .cap .col{left:324px;top:950px;width:1548px}
+.st-terminal .eyebrow{font-size:18px;color:#E6EDF3;gap:12px}
+.st-terminal .eyebrow::before{content:"❯";color:var(--accent);font-weight:700}
+.st-terminal .eyebrow span{color:#7D8590}
+.st-terminal .eyebrow span::before{content:"# "}
+.st-terminal .title{font-size:50px;font-weight:700;letter-spacing:-.02em;line-height:1.15;margin-top:18px}
+.st-terminal.wide .cap .title{font-size:40px;margin-top:10px}
+.st-terminal .cap .title::after,.st-terminal .outro .title::after,.st-terminal .hero-title::after{content:"";display:inline-block;width:.55em;height:.9em;background:var(--accent);vertical-align:-.1em;margin-left:.15em}
+.st-terminal .body{font-size:20px;line-height:1.6;color:#8B949E;margin-top:22px;padding-left:3ch;text-indent:-3ch}
+.st-terminal .body::before{content:"// ";color:#6E7681}
+.st-terminal.wide .cap .body{max-width:960px;margin-top:12px}
+.st-terminal .chips{margin-top:30px}
+.st-terminal.wide .chips{position:absolute;left:1020px;top:46px;margin:0}
+.st-terminal .chip{font-size:18px;gap:12px;padding:10px 16px 10px 14px;background:color-mix(in srgb,var(--accent) 12%,transparent);box-shadow:inset 3px 0 0 var(--accent)}
+.st-terminal .chip i{display:none}
+.st-terminal .chip::before{content:"[ ok ]";color:var(--accent);font-weight:700}
+.st-terminal #cam{left:1452px}
+.st-terminal.wide #cam{left:48px}
+.st-terminal .hero-pre{display:block;left:240px;right:auto;top:250px;text-align:left;font:24px var(--mono);color:#8B949E}
+.st-terminal .hero-pre::before{content:"~ ❯ ";color:var(--accent)}
+.st-terminal .hero-title{left:240px;right:auto;top:300px;text-align:left;font:700 108px var(--mono);letter-spacing:-.045em;white-space:pre}
+.st-terminal .hero-sub{left:240px;right:auto;top:452px;text-align:left;font:28px var(--mono);color:#8B949E}
+.st-terminal .hero-sub::before{content:"// ";color:#6E7681}
+.st-terminal .covers img{filter:drop-shadow(0 0 1px rgba(255,255,255,.4)) drop-shadow(0 24px 40px rgba(0,0,0,.6))}
+.st-terminal .outro .logo{width:64px;height:64px;border-radius:12px;font-size:64px;color:#0A0C10}
+.st-terminal .outro .title{font-size:64px;margin-top:24px}
+.st-terminal.wide .outro .logo{display:none}
+.st-terminal.wide .outro .title{font-size:48px;margin-top:0}
+.st-terminal .outro .body{font-size:22px}
+.st-terminal .pills{margin-top:30px;gap:10px}
+.st-terminal .pill{font:16px var(--mono);color:#C9D1D9;padding:7px 12px;border:1px solid #30363D;border-radius:6px;background:#161B22;text-transform:lowercase}
+.st-terminal .pill::before{content:"#";color:var(--accent);margin-right:2px}
+
+/* ===== controls ===== */
+#hud{position:fixed;left:50%;bottom:28px;transform:translateX(-50%);display:flex;gap:18px;align-items:center;padding:14px 20px;border-radius:14px;background:rgba(10,14,22,.92);border:1px solid rgba(255,255,255,.14);font:14px -apple-system,sans-serif;color:#C9D3EA;z-index:10;white-space:nowrap}
 #hud b{color:#fff}
 #hud kbd{font:600 12px -apple-system,sans-serif;padding:3px 7px;border-radius:6px;background:rgba(255,255,255,.12);color:#fff}
 #time{font-variant-numeric:tabular-nums;color:#fff;font-weight:600}
 body.playing #hud,body.render #hud{display:none}
+#badge{position:fixed;left:24px;top:24px;z-index:30;padding:12px 20px;border-radius:12px;background:#FF2D55;color:#fff;font:700 30px -apple-system,sans-serif}
 </style>
 </head>
 <body>
 <div id="stage">
-  <div class="layer" id="glow"></div>
-  <div class="layer" id="dots"></div>
-  <div id="hero"><div class="layer" id="heroGlow"></div><div id="cutouts"></div><div id="heroTitle"></div><div id="heroSub"></div></div>
-  <div id="brand"></div>
-  <div id="steps"></div>
-  <div id="caps"></div>
-  <div id="chips"></div>
-  <div id="winWrap"><div id="win">
-    <div id="bar"><div class="lights"><b></b><b></b><b></b></div><span id="winTitle"></span></div>
-    <div id="lens"><div id="zoom"></div><div id="island"></div></div>
-  </div></div>
-  <div id="overlays"></div>
-  <div class="layer" id="vignette"></div>
-  <div id="cam">Loom camera</div>
-  <div class="layer" id="black"></div>
+  <div class="deco"></div>
+  <div id="design">
+    <div id="under"></div>
+    <div id="intro"><div class="covers" id="covers"></div><div class="hero-pre" id="heroPre"></div><div class="hero-title" id="heroTitle"></div><div class="hero-sub" id="heroSub"></div></div>
+    <div id="brand"></div>
+    <div id="steps"></div>
+    <div id="winWrap"><div id="win">
+      <div id="bar"><div class="lights"><b></b><b></b><b></b></div><span id="winTitle"></span></div>
+      <div id="lens"><div id="swap"><div id="zoom"></div></div><div id="island"></div></div>
+    </div></div>
+    <div id="overlays"></div>
+    <div id="caps"></div>
+    <div id="over"></div>
+    <div id="cam">Loom camera</div>
+  </div>
+  <div id="black"></div>
 </div>
 <audio id="music" preload="auto"></audio>
-<div id="hud"><b id="hudName"></b><span id="time">Loading…</span><span><kbd>Space</kbd> play / pause</span><span><kbd>F</kbd> full screen</span><span><kbd>C</kbd> camera spot</span><span id="hudMusic"><kbd>M</kbd> music <b id="musicState">on</b></span><span><kbd>R</kbd> restart</span><span><kbd>←</kbd> <kbd>→</kbd> 5 s</span></div>
+<div id="hud"><b id="hudName"></b><span id="time">Loading…</span><span><kbd>Space</kbd> play / pause</span><span><kbd>S</kbd> style <b id="styleName"></b></span><span><kbd>T</kbd> tempo <b id="tempoName"></b></span><span><kbd>F</kbd> full screen</span><span><kbd>C</kbd> camera spot</span><span id="hudMusic"><kbd>M</kbd> music <b id="musicState">on</b></span><span><kbd>R</kbd> restart</span><span><kbd>←</kbd> <kbd>→</kbd> 5 s</span></div>
 
 <script src="demo.config.js"></script>
 <script>
 const C = window.DEMO;
-const ST = Object.assign({w: 1920, h: 1248}, C.stage);
-const INTRO_END = C.intro.end ?? 5.4;
-const OUTRO_HOLD = C.outro.hold ?? 6;
-
+const q = new URLSearchParams(location.search);
 const $ = id => document.getElementById(id);
 const clamp = x => Math.max(0, Math.min(1, x));
 const easeIO = x => x < .5 ? 4 * x * x * x : 1 - Math.pow(-2 * x + 2, 3) / 2;
 const easeOut = x => 1 - Math.pow(1 - x, 3);
+const back = (x, b) => { const c1 = 1.70158 * b, c3 = c1 + 1; return 1 + c3 * Math.pow(x - 1, 3) + c1 * Math.pow(x - 1, 2); };
 const ramp = (t, a, d) => clamp((t - a) / d);
-const hexRgb = h => { const n = parseInt(h.slice(1), 16); return `${n >> 16 & 255},${n >> 8 & 255},${n & 255}`; };
+const esc = s => String(s).replace(/[&<>"]/g, m => ({'&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;'}[m]));
 
-// ---- theme + layout --------------------------------------------------------
-const B = C.brand, root = document.documentElement.style;
-for (const [k, v] of Object.entries({'--bg': B.bg, '--accent': B.accent, '--accent-hi': B.accentHi, '--muted': B.muted})) if (v) root.setProperty(k, v);
-if (B.accent) root.setProperty('--accent-rgb', hexRgb(B.accent));
-if (B.accentHi) root.setProperty('--accent-hi-rgb', hexRgb(B.accentHi));
-const A = hexRgb(B.accent || '#2F7BEA');
-const stage = $('stage');
+// ---- looks -----------------------------------------------------------------
+// box(aspect, isPhone) = [left, top, width, height] in the 1920x1248 design space where the app frame goes.
+// mode: 'fit' shrinks the frame to the clip's shape; 'fill' crops the clip to fill the box; 'pane' keeps the box
+// and letterboxes the clip inside it. lift moves the intro title when there are no cut-outs.
+const WIDE = 1.15;
+const STYLES = {
+  midnight: {covers: 'fan', lift: -300, box: a => a >= WIDE ? [760, 140, 1080, 968] : [914, 64, 880, 1120]},
+  paper: {covers: 'shelf', lift: -290, under: '<div class="rule"></div>', box: a => a >= WIDE ? [100, 220, 1120, 940] : [120, 200, 784, 1004]},
+  aurora: {covers: 'arc', lift: -290, outroHidesApp: true, box: a => a >= WIDE ? [380, 330, 1160, 790] : [590, 262, 740, 950]},
+  keynote: {covers: 'reflect', lift: 200, outroHidesApp: true, box: a => a >= WIDE ? [340, 236, 1240, 870] : [560, 140, 800, 979]},
+  swiss: {covers: 'band', lift: 0, box: a => a >= WIDE ? [960, 170, 880, 960] : [1040, 120, 800, 1023]},
+  pop: {covers: 'scatter', lift: -300, over: s => s === false ? '' : `<div class="stamp">${esc(s || 'Live demo')}</div>`,
+    box: (a, phone) => phone || a < .7 ? [1000, 128, 820, 1062] : [60, 128, 1800, 1062], mode: (a, phone) => phone || a < .7 ? 'fit' : 'fill'},
+  terminal: {covers: 'row', lift: 100, typed: true, mode: () => 'pane', box: a => a >= WIDE ? [300, 70, 1596, 800] : [340, 70, 910, 1154],
+    under: '<div class="tbar"><div class="r"><b>●</b> rec  utf-8  zsh</div></div><div class="pane p-tree"><div class="ph">EXPLORER</div><div class="pt">▾ demo</div></div><div class="pane p-term"><div class="ph">TERMINAL <span>zsh</span></div></div>'},
+};
+// hold/rate/ease/text/intro multiply the config's timings; swap = seconds between chapters; zoom scales camera
+// push-ins; bounce = overshoot on captions and chips; outro = default outro hold.
+const TEMPOS = {
+  calm: {hold: 1.5, rate: 1, ease: 1.4, text: 1.3, swap: .8, transition: 'fade', intro: 1.25, outro: 7, zoom: .92, bounce: 0},
+  steady: {hold: 1, rate: 1, ease: 1, text: 1, swap: .4, transition: 'fade', intro: 1, outro: 6, zoom: 1, bounce: 0},
+  brisk: {hold: .7, rate: 1.15, ease: .75, text: .8, swap: .35, transition: 'slide', intro: .85, outro: 5, zoom: 1.05, bounce: .5},
+  fast: {hold: .5, rate: 1.3, ease: .55, text: .65, swap: .3, transition: 'zoom', intro: .7, outro: 4, zoom: 1.1, bounce: 1},
+};
+const STYLE_IDS = Object.keys(STYLES), TEMPO_IDS = Object.keys(TEMPOS);
+const pick = (v, ids, kind) => { if (v && !ids.includes(v)) console.warn(`unknown ${kind} "${v}"; use ${ids.join(', ')}`); return ids.includes(v) ? v : ids[kind === 'style' ? 0 : 1]; };
+const TEMPO_CFG = typeof C.tempo === 'object' ? C.tempo : {preset: C.tempo};
+let styleId = pick(q.get('style') || C.style, STYLE_IDS, 'style');
+let tempoId = pick(q.get('tempo') || TEMPO_CFG.preset, TEMPO_IDS, 'tempo');
+
+// ---- stage -----------------------------------------------------------------
+const B = C.brand || {};
+if (B.accent) document.documentElement.style.setProperty('--accent', B.accent);
+const ST = Object.assign({w: 1920, h: 1248}, C.stage);
+const stage = $('stage'), design = $('design');
 stage.style.width = ST.w + 'px'; stage.style.height = ST.h + 'px';
-$('glow').style.background = `radial-gradient(ellipse 900px 820px at ${ST.w * .72}px ${ST.h / 2}px,rgba(${A},.28),transparent 70%),radial-gradient(ellipse 760px 560px at 160px 60px,rgba(${A},.10),transparent 70%)`;
-$('heroGlow').style.background = `radial-gradient(ellipse 760px 380px at ${ST.w / 2}px ${ST.h * .34}px,rgba(${A},.38),transparent 72%)`;
-$('cam').style.top = (ST.h - 468) + 'px';
+const K = Math.min(ST.w / 1920, ST.h / 1248), OX = (ST.w - 1920 * K) / 2, OY = (ST.h - 1248 * K) / 2;
+design.style.transform = `translate(${OX}px,${OY}px) scale(${K})`;
+stage.style.setProperty('--k', K); stage.style.setProperty('--oy', OY + 'px');
+const FR = Object.assign({type: 'mac', aspect: 16 / 10}, C.frame);
 
-const FR = Object.assign({type: 'mac', aspect: 9 / 16, centerX: ST.w * .705, margin: 64, maxWidth: 900}, C.frame);
-const BAR = FR.type === 'mac' ? 44 : 0, PAD = FR.type === 'phone' ? 14 : 0;
-let H = ST.h - 2 * FR.margin - BAR - 2 * PAD, W = H * FR.aspect;
-if (W > FR.maxWidth - 2 * PAD) { W = FR.maxWidth - 2 * PAD; H = W / FR.aspect; }
-W = Math.round(W); H = Math.round(H);
-const winW = W + 2 * PAD, winH = H + BAR + 2 * PAD;
-const winLeft = Math.min(ST.w - 60 - winW, FR.centerX - winW / 2), winTop = (ST.h - winH) / 2;
-Object.assign($('winWrap').style, {left: winLeft + 'px', top: winTop + 'px', width: winW + 'px', height: winH + 'px'});
-$('win').className = FR.type;
-if (FR.type === 'phone') { const r = Math.round(winW * .16); $('win').style.borderRadius = r + 'px'; $('lens').style.borderRadius = (r - PAD) + 'px'; }
-for (const id of ['lens', 'zoom']) Object.assign($(id).style, {width: W + 'px', height: H + 'px'});
-$('winTitle').textContent = FR.title || B.name;
-
-// ---- timeline --------------------------------------------------------------
+// ---- timeline maths --------------------------------------------------------
+let TP;
 function build(steps, g) {
   const segs = [];
   for (const [kind, a, b, rate] of steps) {
-    if (kind === 'hold') { segs.push({g0: g, g1: g + b, c0: a, c1: a, r: 0}); g += b; continue; }
-    const r = rate || 1, d = (b - a) / r;
+    if (kind === 'hold') { const d = b * TP.hold; segs.push({g0: g, g1: g + d, c0: a, c1: a, r: 0}); g += d; continue; }
+    const r = (rate || 1) * TP.rate, d = (b - a) / r;
     segs.push({g0: g, g1: g + d, c0: a, c1: b, r}); g += d;
   }
   return segs;
@@ -161,132 +470,223 @@ function gOf(segs, c, off = 0) {
   throw new Error('clip time not on timeline: ' + c);
 }
 
-const CHAPTERS = C.chapters.map((ch, i) => ({...ch, id: 'c' + i}));
-let cursor = INTRO_END;
-for (const ch of CHAPTERS) { ch.segs = build(ch.steps, cursor); ch.g0 = cursor; ch.g1 = ch.segs[ch.segs.length - 1].g1; cursor = ch.g1; }
-const OUTRO = cursor;
-const DUR = C.duration ? Math.max(C.duration, OUTRO + 2) : Math.ceil(OUTRO + OUTRO_HOLD);
-if (C.duration && C.duration < OUTRO + 2) console.warn(`duration ${C.duration}s is shorter than the content (${(OUTRO + 2).toFixed(1)}s)`);
-
-const KF = [];
-CHAPTERS.forEach((ch, i) => {
-  if (i) KF.push({g: ch.g0 - .45, s: 1, fx: .5, fy: .5, d: .45});
-  for (const [c, off, s, fx, fy, d] of ch.cams || []) KF.push({g: gOf(ch.segs, c, off), s, fx, fy, d});
-});
-KF.push({g: OUTRO, s: 1, fx: .5, fy: .5, d: 1.1});
-KF.sort((a, b) => a.g - b.g);
-
-const CHIPS = [];
-CHAPTERS.forEach(ch => (ch.chips || []).forEach(([c, off, text, cEnd]) =>
-  CHIPS.push({g0: gOf(ch.segs, c, off), g1: cEnd === undefined ? ch.g1 - .35 : gOf(ch.segs, cEnd), text, ch})));
-
-// ---- DOM -------------------------------------------------------------------
-const esc = s => String(s).replace(/[&<>"]/g, m => ({'&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;'}[m]));
-const logo = cls => B.logo ? `<img class="logo ${cls || ''}" alt="" src="${esc(B.logo)}">` : `<div class="logo mono ${cls || ''}">${esc((B.name || '?')[0])}</div>`;
+// ---- DOM (built once; styles only change classes and layout) --------------
+const CHAPTERS = C.chapters.map((ch, i) => ({...ch, id: 'c' + i, n: String(i + 1).padStart(2, '0')}));
+const slug = s => String(s).toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
+const logo = () => `<div class="logo">${B.logo ? `<img alt="" src="${esc(B.logo)}">` : `<b>${esc((B.name || '?')[0])}</b>`}</div>`;
 $('brand').innerHTML = `${logo()}<div class="name">${esc(B.name)}</div>${B.tag ? `<div class="tag">${esc(B.tag)}</div>` : ''}`;
 $('hudName').textContent = `${B.name} demo`;
-$('heroTitle').textContent = C.intro.title;
+$('winTitle').textContent = FR.title || B.name;
+$('steps').innerHTML = CHAPTERS.map(c => `<div class="step"><div class="lbl"><em>${c.n}</em>${esc(c.label)}</div><div class="track"><div class="fill"></div></div></div>`).join('');
+const HERO = C.intro.title, HL = C.intro.highlight ?? B.name;
+const heroHTML = HL && HERO.includes(HL) ? esc(HERO).replace(esc(HL), `<mark>${esc(HL)}</mark>`) : esc(HERO);
 $('heroSub').textContent = C.intro.sub || '';
-$('heroTitle').style.top = (ST.h * .585) + 'px';
-$('heroSub').style.top = (ST.h * .585 + 126) + 'px';
-$('steps').style.gridTemplateColumns = `repeat(${CHAPTERS.length},1fr)`;
-$('steps').innerHTML = CHAPTERS.map(c => `<div class="step"><div class="lbl">${esc(c.label)}</div><div class="bar"><div class="fill"></div></div></div>`).join('');
-$('caps').innerHTML = CHAPTERS.map((c, i) =>
-  `<div class="cap"><div class="eyebrow">${String(i + 1).padStart(2, '0')}<span>${esc(c.label)}</span></div><div class="title">${esc(c.title)}</div><div class="body">${esc(c.body)}</div></div>`).join('') +
-  `<div class="cap" id="outro">${logo()}<div class="title">${esc(C.outro.title || B.name)}</div><div class="body">${esc(C.outro.sub || '')}</div><div class="pills">${CHAPTERS.map(c => `<div class="pill">${esc(c.label)}</div>`).join('')}</div></div>`;
-$('chips').innerHTML = CHIPS.map(c => `<div class="chip"><i></i>${esc(c.text)}</div>`).join('');
+$('heroPre').textContent = C.intro.command || `open ${slug(B.name)}`;
+$('caps').innerHTML = CHAPTERS.map(c => `<div class="cap"><div class="col">
+    <div class="text"><div class="eyebrow">${c.n}<span>${esc(c.label)}</span></div><div class="title">${esc(c.title)}</div><div class="body">${esc(c.body)}</div></div>
+    <div class="chips">${(c.chips || []).map(ch => `<div class="chip"><i></i>${esc(ch[2])}</div>`).join('')}</div></div></div>`).join('') +
+  `<div class="cap outro"><div class="col"><div class="text">${logo()}<div class="title">${esc(C.outro.title || B.name)}</div><div class="body">${esc(C.outro.sub || '')}</div>
+    <div class="pills">${CHAPTERS.map(c => `<div class="pill">${esc(c.label)}</div>`).join('')}</div></div></div></div>`;
 $('zoom').innerHTML = CHAPTERS.map(ch => `<video class="media" id="${ch.id}" muted playsinline preload="auto" src="${esc(ch.clip)}"></video>`).join('');
 const CUT = C.intro.cutouts || [];
-$('cutouts').innerHTML = CUT.map(src => `<img alt="" src="${esc(src)}">`).join('');
+$('covers').innerHTML = CUT.map(src => `<img alt="" src="${esc(src)}">`).join('');
 const OVERLAYS = (C.overlays || []).map((o, i) => ({...o, id: 'o' + i, ch: CHAPTERS[o.chapter || 0]}));
-$('overlays').innerHTML = OVERLAYS.map(o => {
-  const [x, y, w] = o.rect, h = Math.round(w / o.aspect);
-  return `<div class="overlay" id="${o.id}w" style="left:${x}px;top:${y}px;width:${w}px;height:${h}px;border-radius:${o.radius ?? 14}px;transform-origin:${o.origin || '50% 50%'}"><video class="media" id="${o.id}" muted playsinline preload="auto" src="${esc(o.clip)}"></video></div>`;
-}).join('');
+$('overlays').innerHTML = OVERLAYS.map(o => `<div class="overlay" id="${o.id}w" style="border-radius:${o.radius ?? 14}px;transform-origin:${o.origin || '50% 50%'}"><video class="media" id="${o.id}" muted playsinline preload="auto" src="${esc(o.clip)}"></video></div>`).join('');
 
-const capEls = [...document.querySelectorAll('.cap')];
+const capEls = [...document.querySelectorAll('#caps .cap')];
 const stepEls = [...document.querySelectorAll('.step')];
-const chipEls = [...document.querySelectorAll('.chip')];
-const cutEls = [...document.querySelectorAll('#cutouts img')];
-CHIPS.forEach((c, i) => c.el = chipEls[i]);
-
-const VIDS = CHAPTERS.map((ch, i) => ({el: $(ch.id), src: ch.clip, segs: ch.segs, show: [ch.g0 - (i ? .4 : 1.2), i < CHAPTERS.length - 1 ? ch.g1 + .4 : DUR + 1], ch}));
-for (const o of OVERLAYS) {
-  // An overlay clip must start at the same source moment as its chapter's clip, so they share clip time.
-  o.gOut = gOf(o.ch.segs, o.outAt ?? o.ch.steps[o.ch.steps.length - 1][1]);
-  VIDS.push({el: $(o.id), src: o.clip, segs: o.ch.segs, show: [o.ch.g0 - 1.2, o.gOut + .6], overlay: o});
-}
+const cutEls = [...document.querySelectorAll('#covers img')];
+CHAPTERS.forEach((ch, i) => { ch.capEl = capEls[i]; ch.chipEls = [...capEls[i].querySelectorAll('.chip')]; });
+const outroEl = capEls[CHAPTERS.length];
+const VIDS = [...CHAPTERS.map(ch => ({el: $(ch.id), src: ch.clip, ch})), ...OVERLAYS.map(o => ({el: $(o.id), src: o.clip, ch: o.ch, overlay: o}))];
+CHAPTERS.forEach(ch => ch.vid = VIDS.find(v => v.ch === ch && !v.overlay));
 window.__clips = VIDS.map(v => ({id: v.el.id, src: v.src}));
 
-function setCap(el, t, tIn, tOut) {
-  [...el.children].forEach((k, j) => {
-    const pIn = easeOut(ramp(t, tIn + j * .09, .65));
-    const pOut = tOut === undefined ? 0 : easeIO(ramp(t, tOut, .35));
-    k.style.opacity = pIn * (1 - pOut);
-    k.style.transform = `translateY(${(1 - pIn) * 30 - pOut * 18}px)`;
+// ---- timeline (rebuilt when the tempo changes) ----------------------------
+let INTRO_END, IE, OUTRO, DUR, KF, CHIPS;
+function rebuild() {
+  TP = Object.assign({}, TEMPOS[tempoId], (TEMPO_CFG.preset || 'steady') === tempoId ? TEMPO_CFG : {});
+  IE = C.intro.end ?? 5.4;
+  INTRO_END = IE * TP.intro;
+  let g = INTRO_END;
+  for (const ch of CHAPTERS) { ch.segs = build(ch.steps, g); ch.g0 = g; ch.g1 = ch.segs[ch.segs.length - 1].g1; g = ch.g1; }
+  OUTRO = g;
+  const hold = C.outro.hold ?? TP.outro;
+  DUR = C.duration ? Math.max(C.duration, OUTRO + 2) : Math.ceil(OUTRO + hold);
+  if (C.duration && C.duration < OUTRO + 2) console.warn(`duration ${C.duration}s is shorter than the content (${(OUTRO + 2).toFixed(1)}s)`);
+
+  KF = [];
+  CHAPTERS.forEach((ch, i) => {
+    if (i) KF.push({g: ch.g0 - TP.swap, s: 1, fx: .5, fy: .5, d: TP.swap});
+    for (const [c, off, s, fx, fy, d] of ch.cams || []) KF.push({g: gOf(ch.segs, c, off * TP.hold), s: 1 + (s - 1) * TP.zoom, fx, fy, d: d * TP.ease});
+  });
+  KF.push({g: OUTRO, s: 1, fx: .5, fy: .5, d: 1.1 * TP.ease});
+  KF.sort((a, b) => a.g - b.g);
+
+  CHIPS = [];
+  CHAPTERS.forEach(ch => (ch.chips || []).forEach(([c, off, , cEnd], j) =>
+    CHIPS.push({el: ch.chipEls[j], g0: gOf(ch.segs, c, off * TP.hold), g1: cEnd === undefined ? ch.g1 - TP.swap : gOf(ch.segs, cEnd)})));
+
+  CHAPTERS.forEach((ch, i) => { ch.vid.segs = ch.segs; ch.vid.show = [ch.g0 - TP.swap - (i ? .1 : 1.2), i < CHAPTERS.length - 1 ? ch.g1 + TP.swap + .1 : DUR + 1]; });
+  for (const v of VIDS) if (v.overlay) {
+    const o = v.overlay;
+    o.gOut = gOf(o.ch.segs, o.outAt ?? o.ch.steps[o.ch.steps.length - 1][1]);
+    v.segs = o.ch.segs; v.show = [o.ch.g0 - 1.2, o.gOut + .6];
+  }
+  window.__duration = DUR;
+}
+
+// ---- layout (re-run when the style changes) --------------------------------
+let MODE, L = {w: 1, h: 1}, V = {w: 1, h: 1}, WR;
+function layout() {
+  const S = STYLES[styleId], a = FR.aspect, phone = FR.type === 'phone';
+  MODE = S.mode ? S.mode(a, phone) : 'fit';
+  stage.className = `st-${styleId} ${a >= WIDE ? 'wide' : 'tall'} m-${MODE}`;
+  $('under').innerHTML = S.under || '';
+  $('over').innerHTML = S.over ? S.over(C.stamp) : '';
+  const win = $('win'), wrap = $('winWrap'), lens = $('lens');
+  win.className = MODE === 'fit' ? FR.type : 'pane';
+  const [bx, by, bw, bh] = S.box(a, phone);
+  Object.assign(wrap.style, {left: bx + 'px', top: by + 'px', width: bw + 'px', height: bh + 'px'});
+  win.style.borderRadius = lens.style.borderRadius = '';
+  const cw = bw - lens.clientWidth, chh = bh - lens.clientHeight;   // title bar, bezel and borders around the clip
+  let x = bx, y = by, w = bw, h = bh;
+  if (MODE === 'fit') {
+    let H = bh - chh, W = H * a;
+    if (W > bw - cw) { W = bw - cw; H = W / a; }
+    w = W + cw; h = H + chh; x = bx + (bw - w) / 2; y = by + (bh - h) / 2;
+    Object.assign(wrap.style, {left: x + 'px', top: y + 'px', width: w + 'px', height: h + 'px'});
+    if (phone) { const r = Math.round(w * .16); win.style.borderRadius = r + 'px'; lens.style.borderRadius = (r - 14) + 'px'; }
+  }
+  WR = {x, y, w, h};
+  L = {w: lens.clientWidth, h: lens.clientHeight};
+  V.w = Math.min(L.w, L.h * a); V.h = V.w / a;
+  Object.assign($('zoom').style, {width: V.w + 'px', height: V.h + 'px'});
+  for (const o of OVERLAYS) {
+    // at = centre of the overlay as fractions of the app frame; width in design px.
+    const [fx, fy] = o.at || [.5, .5], ow = o.width || 900, oh = ow / o.aspect;
+    Object.assign($(o.id + 'w').style, {width: ow + 'px', height: oh + 'px',
+      left: Math.max(20, Math.min(1900 - ow, x + fx * w - ow / 2)) + 'px', top: Math.max(20, Math.min(1228 - oh, y + fy * h - oh / 2)) + 'px'});
+  }
+  $('styleName').textContent = styleId;
+  $('tempoName').textContent = tempoId;
+}
+
+// ---- intro cut-outs --------------------------------------------------------
+const COVER = {
+  fan: (i, n, cw, p, d) => { const k = i - (n - 1) / 2; return {w: cw, x: 960 - cw / 2 + k * cw * .78 * (.85 + .15 * p), y: 212 + k * k * 9 + (1 - p) * 90 - 14 * d, tf: `rotate(${k * 4.2 * p}deg) scale(${.94 + .06 * p})`}; },
+  shelf: (i, n, cw, p) => { const w = cw * .875, gap = w * .12, x0 = 960 - (n * w + (n - 1) * gap) / 2; return {w, x: x0 + i * (w + gap), y: 244 + (1 - p) * 40, tf: ''}; },
+  arc: (i, n, cw, p) => { const k = i - (n - 1) / 2, w = cw * .97; return {w, x: 960 - w / 2 + k * w * .88, y: 170 + k * k * 7 + (1 - p) * 60, tf: `rotateY(${-k * 17 - (1 - p) * 25 * (k < 0 ? -1 : 1)}deg) translateZ(${-Math.abs(k) * 70}px)`}; },
+  reflect: (i, n, cw, p) => { const w = cw * .8, gap = w * .16, x0 = 960 - (n * w + (n - 1) * gap) / 2; return {w, x: x0 + i * (w + gap), y: 580 + (1 - p) * 50, tf: ''}; },
+  band: (i, n, cw, p) => { const w = cw * .84, gap = w * .12, x0 = 1160 - (n * w + (n - 1) * gap) / 2; return {w, x: x0 + i * (w + gap) - (1 - p) * 120, y: 600, tf: ''}; },
+  scatter: (i, n, cw, p) => { const k = i - (n - 1) / 2, w = cw * .98; return {w, x: 960 - w / 2 + k * w * 1.1, y: 110 + [60, 0, 74, 10, 64, 6, 70, 4][i % 8], tf: `rotate(${[-8, 5, -4, 7, -6, 4, -5, 6][i % 8]}deg) scale(${p})`}; },
+  row: (i, n, cw) => { const w = cw * .75; return {w, x: 240 + i * w * 1.14, y: 580, tf: ''}; },
+};
+function placeIntro(ti) {
+  const S = STYLES[styleId], n = cutEls.length, cw = C.intro.cutoutWidth || 240, drift = easeIO(ramp(ti, 0, IE));
+  let shelf = 0;
+  cutEls.forEach((el, i) => {
+    const r = ramp(ti, .25 + i * .11, 1);
+    const p = S.covers === 'scatter' ? back(r, 1) : S.covers === 'row' ? (r > 0 ? 1 : 0) : easeOut(r);
+    const c = COVER[S.covers](i, n, cw, p, drift);
+    el.style.width = c.w + 'px';
+    el.style.opacity = Math.min(1, S.covers === 'scatter' ? r * 3 : p);
+    el.style.transform = `translate(${c.x}px,${c.y}px) ${c.tf}`;
+    if (el.naturalWidth) shelf = Math.max(shelf, c.y + c.w * el.naturalHeight / el.naturalWidth);
+  });
+  if (S.covers === 'shelf' && shelf) $('intro').style.setProperty('--shelf-y', shelf + 8 + 'px');
+  const lift = n ? 0 : S.lift, t0 = n ? 1.5 : .4;
+  if (S.typed) {
+    const pre = ramp(ti, .2, .3), chars = Math.round(HERO.length * ramp(ti, t0 - .8, .9));
+    $('heroPre').style.opacity = pre;
+    $('heroTitle').textContent = HERO.slice(0, chars);
+    $('heroTitle').style.opacity = chars ? 1 : 0;
+    $('heroTitle').style.transform = `translateY(${lift}px)`;
+    $('heroPre').style.transform = `translateY(${lift}px)`;
+  } else {
+    if ($('heroTitle').innerHTML !== heroHTML) $('heroTitle').innerHTML = heroHTML;
+    const p = easeOut(ramp(ti, t0, .7));
+    $('heroTitle').style.opacity = p;
+    $('heroTitle').style.transform = `translateY(${(1 - p) * 30 + lift}px)`;
+  }
+  const ps = easeOut(ramp(ti, t0 + .35, .7));
+  $('heroSub').style.opacity = ps;
+  $('heroSub').style.transform = `translateY(${(1 - ps) * 30 + lift}px)`;
+}
+
+// ---- one frame -------------------------------------------------------------
+function setCap(capEl, t, tIn, tOut) {
+  const txt = capEl.querySelector('.text'), d = TP.text;
+  const pOut = tOut === undefined ? 0 : easeIO(ramp(t, tOut, .35 * d));
+  txt.style.opacity = easeOut(ramp(t, tIn, .3 * d)) * (1 - pOut);
+  [...txt.children].forEach((k, j) => {
+    const r = ramp(t, tIn + j * .09 * d, .65 * d);
+    k.style.opacity = easeOut(r) * (1 - pOut);
+    k.style.transform = `translateY(${(1 - back(r, TP.bounce)) * 30 - pOut * 18}px)`;
   });
 }
 
-// ---- frame -----------------------------------------------------------------
 function apply(t) {
+  const S = STYLES[styleId], ti = t / TP.intro;
   $('black').style.opacity = 1 - ramp(t, 0, .6);
 
-  const heroOut = easeIO(ramp(t, INTRO_END - 1.1, .75));
-  $('hero').style.opacity = ramp(t, 0, .4) * (1 - heroOut);
-  const drift = easeIO(ramp(t, 0, INTRO_END));
-  const cw = C.intro.cutoutWidth || 240, n = cutEls.length;
-  cutEls.forEach((el, i) => {
-    const k = i - (n - 1) / 2, p = easeOut(ramp(t, .25 + i * .11, 1));
-    el.style.width = cw + 'px';
-    const x = ST.w / 2 - cw / 2 + k * cw * .78 * (.85 + .15 * p), y = ST.h * .17 + k * k * 9 + (1 - p) * 90 - 14 * drift;
-    el.style.opacity = p;
-    el.style.transform = `translate(${x}px,${y}px) rotate(${k * 4.2 * p}deg) scale(${.94 + .06 * p})`;
-  });
-  for (const [id, t0] of [['heroTitle', n ? 1.5 : .4], ['heroSub', n ? 1.85 : .75]]) {
-    const p = easeOut(ramp(t, t0, .7));
-    $(id).style.opacity = p;
-    $(id).style.transform = `translateY(${(1 - p) * 30 - (n ? 0 : ST.h * .17)}px)`;
-  }
-  $('vignette').style.opacity = 1 - .45 * ramp(t, INTRO_END - .6, 1);
+  const heroOut = easeIO(ramp(ti, IE - 1.1, .75));
+  $('intro').style.opacity = ramp(ti, 0, .4) * (1 - heroOut);
+  if (heroOut < 1) placeIntro(ti);
 
-  const main = easeOut(ramp(t, INTRO_END - .5, .8));
-  $('brand').style.opacity = main;
-  $('steps').style.opacity = main;
+  const main = easeOut(ramp(ti, IE - .5, .8));
+  for (const id of ['brand', 'steps', 'under', 'over']) $(id).style.opacity = main;
 
   let s = 1, fx = .5, fy = .5;
   for (const k of KF) { if (t < k.g) break; const p = easeIO(clamp((t - k.g) / k.d)); s += (k.s - s) * p; fx += (k.fx - fx) * p; fy += (k.fy - fy) * p; }
-  const tx = Math.min(0, Math.max(W - W * s, W / 2 - fx * W * s));
-  const ty = Math.min(0, Math.max(H - H * s, H / 2 - fy * H * s));
-  $('zoom').style.transform = `translate(${tx}px,${ty}px) scale(${s})`;
+  if (MODE === 'fill') s = Math.max(s, L.w / V.w, L.h / V.h);
+  const pos = (lens, size, f) => size <= lens ? (lens - size) / 2 : Math.min(0, Math.max(lens - size, lens / 2 - f * size));
+  $('zoom').style.transform = `translate(${pos(L.w, V.w * s, fx)}px,${pos(L.h, V.h * s, fy)}px) scale(${s})`;
 
-  const rise = 180 * (1 - easeOut(ramp(t, INTRO_END - .7, 1.2)));
-  $('winWrap').style.opacity = ramp(t, INTRO_END - .7, .7);
-  $('winWrap').style.transform = `translateY(${rise}px) scale(${1 + .015 * (s - 1)})`;
+  const rise = 180 * (1 - easeOut(ramp(ti, IE - .7, 1.2)));
+  let wo = ramp(ti, IE - .7, .7), ws = 1, wy = rise;
+  if (S.outroHidesApp) { const p = easeIO(ramp(t, OUTRO, .7 * TP.text)); wo *= 1 - p; ws = 1 - .06 * p; wy += 60 * p; }
+  $('winWrap').style.opacity = wo;
+  $('winWrap').style.transform = `translateY(${wy}px) scale(${ws})`;
 
-  VIDS.forEach((v, i) => { if (!v.overlay) v.el.style.opacity = i ? ramp(t, v.ch.g0 - .35, .35) : 1; });
+  const D = TP.swap;
+  CHAPTERS.forEach((ch, i) => {
+    const el = ch.vid.el, pin = i ? easeIO(ramp(t, ch.g0 - D, D)) : 1;
+    if (TP.transition === 'slide') {
+      const nxt = CHAPTERS[i + 1], pout = nxt ? easeIO(ramp(t, nxt.g0 - D, D)) : 0;
+      el.style.opacity = pin > 0 ? 1 : 0;
+      el.style.transform = `translateX(${(1 - pin) * 100 - pout * 30}%)`;
+    } else {
+      el.style.opacity = TP.transition === 'zoom' && i ? ramp(t, ch.g0 - D * .45, D * .45) : pin;
+      el.style.transform = '';
+    }
+  });
+  let bump = 0;
+  if (TP.transition === 'zoom') for (const ch of CHAPTERS.slice(1)) bump = Math.max(bump, Math.sin(Math.PI * ramp(t, ch.g0 - D, 2 * D)));
+  $('swap').style.transform = bump ? `scale(${1 + .08 * bump})` : '';
+
   for (const o of OVERLAYS) {
     const first = o.ch === CHAPTERS[0];
-    const pIn = first ? ramp(t, INTRO_END - .5, .6) : ramp(t, o.ch.g0 - .35, .35);
-    const out = easeIO(ramp(t, o.gOut, .45));
+    const pIn = first ? ramp(ti, IE - .5, .6) : ramp(t, o.ch.g0 - D, D);
+    const out = easeIO(ramp(t, o.gOut, .45 * TP.text));
     const [pc, pd, ps] = o.push || [0, 0, 0];
-    const push = pd ? easeIO(ramp(t, gOf(o.ch.segs, pc), pd)) : 0;
+    const push = pd ? easeIO(ramp(t, gOf(o.ch.segs, pc), pd * TP.ease)) : 0;
     const el = $(o.id + 'w');
     el.style.opacity = pIn * (1 - out);
     el.style.transform = `translate(${-40 * out}px,${first ? rise : 0}px) scale(${(1 + ps * push) * (1 - .04 * out)})`;
   }
 
   CHAPTERS.forEach((ch, i) => {
-    setCap(capEls[i], t, ch.g0 - (i ? .1 : .4), ch.g1 - .35);
+    setCap(ch.capEl, t, ch.g0 - (i ? .1 : .4) * TP.text, ch.g1 - D);
     stepEls[i].querySelector('.fill').style.width = `${100 * ramp(t, ch.g0, ch.g1 - ch.g0)}%`;
     stepEls[i].classList.toggle('on', t >= ch.g0 - .1 && (t < ch.g1 - .1 || t >= OUTRO));
+    stepEls[i].classList.toggle('done', t >= ch.g1 - .1);
   });
-  setCap(capEls[CHAPTERS.length], t, OUTRO + .15);
+  setCap(outroEl, t, OUTRO + .15 * TP.text);
 
   for (const c of CHIPS) {
-    const cap = capEls[CHAPTERS.indexOf(c.ch)];
-    c.el.style.top = `${cap.offsetTop + cap.offsetHeight + 34}px`;
-    const pIn = easeOut(ramp(t, c.g0, .5)), pOut = easeIO(ramp(t, c.g1, .3));
-    c.el.style.opacity = pIn * (1 - pOut);
+    const r = ramp(t, c.g0, .5 * TP.text), pIn = back(r, TP.bounce), pOut = easeIO(ramp(t, c.g1, .3 * TP.text));
+    c.el.style.opacity = Math.min(1, r * 1.6) * (1 - pOut);
     c.el.style.transform = `translateY(${(1 - pIn) * 16}px) scale(${.96 + .04 * pIn})`;
   }
 }
@@ -337,6 +737,9 @@ function fit() {
 addEventListener('resize', fit);
 fit();
 
+rebuild();
+layout();
+
 const fmt = t => `${Math.floor(t / 60)}:${String(Math.floor(t % 60)).padStart(2, '0')}`;
 let t = 0, t0 = 0, playing = false, ready = false;
 function show() { apply(t); $('time').textContent = `${fmt(t)} / ${fmt(DUR)}`; }
@@ -350,14 +753,16 @@ function loop(now) {
 function start() { if (!ready) return; if (t >= DUR) t = 0; playing = true; t0 = performance.now() - t * 1000; document.body.classList.add('playing'); requestAnimationFrame(loop); }
 function stop() { playing = false; document.body.classList.remove('playing'); VIDS.forEach(v => v.el.pause()); music.pause(); show(); }
 function jump(to) { t = Math.max(0, Math.min(DUR, to)); if (music.src) music.currentTime = t; if (playing) t0 = performance.now() - t * 1000; else { show(); seekAll(t); } }
+const next = (ids, cur) => ids[(ids.indexOf(cur) + 1) % ids.length];
 
-const query = new URLSearchParams(location.search);
-if (query.has('render')) {
+if (q.has('cam')) document.body.classList.add('cam');
+if (q.has('badge')) document.body.insertAdjacentHTML('beforeend', `<div id="badge">${styleId} · ${tempoId}</div>`);
+if (q.has('render')) {
   // Headless render: clip frames are pre-extracted to frames/<id>/00001.jpg… for frame-exact output.
   document.body.classList.add('render');
   music.removeAttribute('src');
-  const FPS = +(query.get('fps') || 30);
-  const counts = Object.fromEntries(query.get('render').split(',').map(kv => kv.split(':')));
+  const FPS = +(q.get('fps') || 30);
+  const counts = Object.fromEntries(q.get('render').split(',').filter(Boolean).map(kv => kv.split(':')));
   for (const v of VIDS) {
     const img = new Image();
     img.id = v.el.id; img.className = v.el.className; img.alt = '';
@@ -367,25 +772,29 @@ if (query.has('render')) {
     t = time; apply(time);
     await Promise.all(targets(time).map(({v, c}) => {
       const src = `frames/${v.el.id}/${String(Math.min(+counts[v.el.id], Math.floor(c * FPS + 1e-6) + 1)).padStart(5, '0')}.jpg`;
-      if (v.src === src) return;
+      if (v.src === src || !counts[v.el.id]) return;
       v.src = v.el.src = src;
       return v.el.decode();
     }));
   };
-  Promise.all(cutEls.map(i => i.decode())).then(() => { ready = true; });
+  Promise.all(cutEls.map(i => i.decode().catch(() => {}))).then(() => { ready = true; });
 } else {
   Promise.all(VIDS.map(v => v.el.readyState >= 2 ? 0 : new Promise(r => v.el.addEventListener('loadeddata', r, {once: true}))))
     .then(() => seekAll(0)).then(() => { ready = true; show(); });
 }
 window.__ready = () => ready;
-window.__duration = DUR;
-window.__chapters = CHAPTERS.map(ch => ({label: ch.label, start: +ch.g0.toFixed(3), end: +ch.g1.toFixed(3), at: c => +gOf(ch.segs, c).toFixed(3)}));
+window.__styles = STYLE_IDS;
+window.__tempos = TEMPO_IDS;
+window.__timeline = () => ({style: styleId, tempo: tempoId, duration: DUR, intro: +INTRO_END.toFixed(3), outro: +OUTRO.toFixed(3),
+  chapters: CHAPTERS.map(ch => ({label: ch.label, start: +ch.g0.toFixed(3), end: +ch.g1.toFixed(3)}))});
 
 addEventListener('keydown', e => {
   if (e.code === 'Space') { e.preventDefault(); playing ? stop() : start(); }
   else if (e.code === 'KeyF') document.fullscreenElement ? document.exitFullscreen() : document.documentElement.requestFullscreen();
   else if (e.code === 'KeyC') document.body.classList.toggle('cam');
   else if (e.code === 'KeyM') { music.muted = !music.muted; $('musicState').textContent = music.muted ? 'off' : 'on'; }
+  else if (e.code === 'KeyS') { styleId = next(STYLE_IDS, styleId); layout(); show(); }
+  else if (e.code === 'KeyT') { tempoId = next(TEMPO_IDS, tempoId); rebuild(); layout(); jump(Math.min(t, DUR)); }
   else if (e.code === 'KeyR') { stop(); jump(0); }
   else if (e.code === 'ArrowRight') jump(t + 5);
   else if (e.code === 'ArrowLeft') jump(t - 5);

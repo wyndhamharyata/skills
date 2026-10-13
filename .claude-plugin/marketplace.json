@@ -8,7 +8,7 @@
   "plugins": [
     {
       "name": "product-demo-video",
-      "description": "Turn a screen recording into an auto-playing product demo page to narrate in Loom, plus a rendered MP4 with music.",
+      "description": "Turn a screen recording into an auto-playing product demo page (7 styles, 4 tempos) to narrate in Loom, plus an MP4 with music.",
       "source": "./",
       "strict": false,
       "skills": [
