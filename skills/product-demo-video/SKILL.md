@@ -30,12 +30,14 @@ such as `<project>/demo/`, with `page/`, `output/` and `render/` inside it.
 | --- | --- |
 | `scripts/contact_sheet.py` | Time-labelled frame grids; `--crop` to one window; `--grid` adds 0.1 gridlines to read focus points |
 | `scripts/activity.py` | Change per sample; lists idle spans (dead air); `--ref` shows when a pop-up (Dock, notification) appears and leaves |
-| `scripts/cut_clips.py` | Cuts cropped clips from `clips.json` (segments with speed); `--map`/`--list` convert source time ↔ clip time |
+| `scripts/cut_clips.py` | Cuts cropped clips from `clips.json` (segments with speed); `--preview` shows every clip's start, middle and end before cutting; `--map`/`--list` convert source time ↔ clip time |
 | `scripts/cutout.py` | Background-removed PNG of a UI element (rounded alpha) for the intro |
 | `assets/demo-template.html` | The page engine. Copy it to `page/index.html`; never edit content into it |
 | `assets/example.config.js` | A complete worked config. Copy it to `page/demo.config.js` and rewrite it |
 | `scripts/render.mjs` | Headless Chromium render to MP4, `--stills t1,t2` for checks, `--timeline` for chapter times; `--style`/`--tempo` override the config, and `--stills … --style all` makes a labelled sheet of every style |
-| `scripts/add_music.py` | Trims, fades and normalises a music track; writes `page/music.m4a`; muxes it into the MP4 |
+| `scripts/music_catalog.py` | Searches Mixkit and Incompetech (title, feel, BPM) and prints direct MP3 links |
+| `scripts/music_beds.py` | Measures candidate tracks, aligns each one's lift with chapter 1, and writes one bed per track for the user to choose |
+| `scripts/add_music.py` | Trims, fades and normalises the chosen track; writes `page/music.m4a`; muxes it into the MP4 |
 | `references/page-config.md` | Every config field, timing and camera semantics, and framing rules. **Read it before writing the config** |
 | `references/styles.md` | The 7 styles and 4 tempos: layouts, what each suits, quirks, and how to choose with the user |
 | `references/music.md` | Free-to-use music sources, licences, and how to pick and align a track |
@@ -47,6 +49,25 @@ first; it lists anything missing with the command to install it.
 
 ## Workflow
 
+### 0. Start clean and keep notes
+
+- **Context is the cost.** Every step re-reads the whole conversation, so a demo built at the end of a long,
+  unrelated session costs several times more than the same demo in a fresh one. If the conversation already
+  holds a lot of other work, say so once and suggest a new session with only the recording path. Carry on if
+  the user would rather stay.
+- **Keep `demo/NOTES.md`** from step 1 onward, and update it after every decision. A new session reads it first
+  instead of analysing the recording again. Keep it short:
+
+  ```md
+  # Demo notes
+  - Recording: <path>, <W×H>, <duration> s, <fps> fps
+  - Crop: <W:H:X:Y>, checked with --preview (left out: <e.g. the Dock on the right edge>)
+  - Beats: <source s> <what happens>, one line each; mark dead air and other apps
+  - Chapters: <clip> src <a–b>: <the action> at clip <t>
+  - Look: <style> / <tempo>. Music: <track> at offset <s>, or "beds in music_choices/, waiting for the user"
+  - Open: <claims to confirm, questions for the user>
+  ```
+
 ### 1. Understand the recording (don't skip; every later step depends on it)
 
 1. `ffprobe` the file for its size, duration and frame rate. Mac screen recordings are often variable frame rate at
@@ -54,7 +75,8 @@ first; it lists anything missing with the command to install it.
 2. Make a 1 frame/s sheet of the whole screen, then a 0.5 s sheet cropped to the app. Write down a beat list:
    what the user does and when (clicks, panels opening, results appearing), and what's dead air or a mistake.
 3. Find exact window bounds by sampling pixels along a row and a column (Python + Pillow) where the window
-   edge meets the wallpaper. Use the content area below the title bar; the page draws its own frame.
+   edge meets the wallpaper. Use the content area below the title bar; the page draws its own frame. The Dock or
+   another window can overlap the app's edge, so confirm the crop with `cut_clips.py --preview` (step 3).
 4. Look outside the app too. If the story starts or ends in the OS (double-clicking a file in Finder, a share
    sheet, a notification), that moment is often the point, for example "it's your system PDF reader". Keep it as
    an **overlay clip** instead of cropping it away. Cropping it out was a real miss.
@@ -77,16 +99,21 @@ is short, say so, and offer a calmer tempo, longer holds or `duration`.
 
 ### 3. Cut the clips
 
-Write `clips.json` (format in `cut_clips.py`'s docstring) and run it. Then **check every cut boundary** with a
-sheet at 0.1–0.25 s around it. Pop-ups and glitches often last longer than they first appear, and a cut needs
+Write `clips.json` (format in `cut_clips.py`'s docstring), and for each chapter write the clip time of its key
+action in `NOTES.md`. **Before cutting**, run `cut_clips.py clips.json --preview` and look at the one sheet it
+writes: the start, middle and end of every clip, cropped. Every tile edge must be the app (no Dock, menu bar
+or other window), every middle tile should show the chapter's action, and no tile may show a pop-up or another
+app. Fix the crop or the ranges first; one sheet is far cheaper than re-cutting six clips. Then cut, and
+**check every cut boundary** with a sheet at 0.1–0.25 s around it. Pop-ups and glitches often last longer than they first appear, and a cut needs
 margin. Overlay clips (for example Finder) get their own `crop` and must start at the same source second as
 their chapter's clip.
 
 ### 4. Cut-outs (background removal)
 
 Use `cutout.py` to pull 4–7 recognisable UI pieces from a clean frame for the intro: covers, cards, a key
-button, app icons. Measure one cleanly, reuse the grid pitch for its siblings, and check the cut-outs on a dark
-background (montage) before using them.
+button, app icons. Measure one cleanly, reuse the grid pitch for its siblings. Pick pieces of a similar shape
+(width ÷ height about 1.3–1.8) so the row reads evenly, and set `intro.cutoutWidth` so the row spans about
+60–70% of the stage width. Check them all in one montage on a dark background before using them.
 
 ### 5. Build the page
 
@@ -116,16 +143,25 @@ for every look, so changing either later is one line and a re-render.
 3. Fix the config and re-check only the stills that changed. Stills take seconds; a full render takes about
    1.5 min per minute of video.
 4. Full render: `node render.mjs ../page/index.html --out ../output/demo-silent.mp4`. Spot-check about 12 frames
-   of the MP4.
+   of the MP4 in one montage.
 
 ### 7. Music (when asked, or offer it)
 
-Follow `references/music.md`, then:
-`add_music.py --track … --offset … --duration <page duration> --page-out page/music.m4a --video-in output/demo-silent.mp4 --video-out output/demo.mp4`.
-Take the duration and the intro end (for `--offset`) from `--timeline` for the chosen tempo. Match the track to
-the tempo: calmer tracks for calm and steady, about 120 BPM and up for brisk and fast. Re-run it whenever the
-tempo changes, because the length changes.
-Add `music: {src: 'music.m4a', volume: .35}` to the config so the live page plays it too.
+You can't hear audio, so the user picks the track. Follow `references/music.md`:
+
+1. Take 3–5 candidates for the chosen style and tempo: first from the heard shortlist in `music.md`, then, for
+   a specific mood the user asked for, from `music_catalog.py`.
+2. Download them into `music_src/` and build one bed each:
+   `music_beds.py --duration <page duration> --intro-end <chapter 1 start> --out music_choices music_src/*.mp3`.
+   Both numbers come from `--timeline` for the chosen tempo. Each bed starts where its lift lands on chapter 1.
+3. Give the user the `music_choices/` folder and the table it printed, and ask which one. Don't mux before they
+   choose, and record the candidates in `NOTES.md`.
+4. Mux the chosen one:
+   `add_music.py --track … --offset <from the table> --duration … --page-out page/music.m4a --video-in output/demo-silent.mp4 --video-out output/demo.mp4`,
+   and add `music: {src: 'music.m4a', volume: .35}` to the config so the live page plays it too.
+
+Re-run the beds and the mux whenever the tempo changes, because the length changes. For an Incompetech track,
+give the user the credit line `music_catalog.py` prints.
 
 ### 8. Hand over
 
@@ -144,6 +180,12 @@ Offer to open Finder on the folder.
 - Users of this skill usually want results fast and get frustrated by long loops. Check with stills before any
   full render. Never re-render the whole video to test one framing change.
 - Report in plain words: what the viewer will see, not filter names.
+- **Every image you look at stays in the conversation** and is re-read on every later turn. Answer each visual
+  question with one montage, not separate frames. Crop to the region in question (`--crop`) instead of reading
+  a whole stage, and don't open an image again once you've described it in `NOTES.md`.
+- Keep tool output short: tables and one-line results, not logs or long directory listings.
+- When a still looks wrong, find which element paints it before changing the config. A frame that is right on
+  its own but wrong after other frames is a page bug, not a stale render; fix it in the template.
 - Keep the user's raw recording untouched. All outputs go in the project's `demo/` folder.
 - ffmpeg builds may lack `drawtext`, and ImageMagick may have no default font (`unable to read font`).
   Label images with Pillow (`contact_sheet.py` does) or pass `-font /path/to/font.ttf`.

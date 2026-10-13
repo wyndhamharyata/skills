@@ -129,7 +129,9 @@ if (stills) {
   await page.waitForFunction(() => window.__ready && window.__ready());
   const outFile = path.resolve(opt('--out', 'output/demo-silent.mp4'));
   fs.mkdirSync(path.dirname(outFile), {recursive: true});
+  // libx264 with yuv420p needs even sides, so an odd stage loses its last pixel row or column.
   const ff = spawn('ffmpeg', ['-v', 'error', '-y', '-f', 'image2pipe', '-c:v', 'mjpeg', '-framerate', String(FPS), '-i', '-',
+    '-vf', 'crop=trunc(iw/2)*2:trunc(ih/2)*2',
     '-c:v', 'libx264', '-preset', 'slow', '-crf', '18', '-pix_fmt', 'yuv420p', '-movflags', '+faststart', outFile], {stdio: ['pipe', 'inherit', 'inherit']});
   const dur = info.timeline.duration, total = Math.round(dur * FPS);
   for (let f = 0; f < total; f++) {

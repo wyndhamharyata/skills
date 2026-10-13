@@ -5,6 +5,7 @@
   cut_clips.py clips.json 03-summaries    # re-cut one clip
   cut_clips.py clips.json --map 03-summaries 32.5   # source second -> clip second (for page timings)
   cut_clips.py clips.json --list          # every clip's segments with their clip-time ranges
+  cut_clips.py clips.json --preview [sheet.jpg]   # start, middle and end of every clip, cropped, before cutting
 
 clips.json:
 {
@@ -19,7 +20,9 @@ clips.json:
   }
 }
 Each segment is [sourceStart, sourceEnd, speed]. Leaving a gap between segments cuts it out.
-Needs ffmpeg.
+--preview shows one row per clip so the crop and the ranges can be checked in one image: every tile edge
+should be the app (no Dock, menu bar or other window) and no tile should show a popup or another app.
+Needs ffmpeg (and Pillow for --preview).
 """
 import json, os, subprocess, sys
 
@@ -38,6 +41,45 @@ def clip_time(segs, src_t):
             return round(t + (src_t - a) / r, 3)
         t += (b - a) / r
     raise SystemExit(f"{src_t} is not inside any kept segment")
+
+
+def source_time(segs, clip_t):
+    for a, b, r in segs:
+        d = (b - a) / r
+        if clip_t <= d:
+            return a + clip_t * r
+        clip_t -= d
+    return segs[-1][1]
+
+
+def preview(cfg, out):
+    sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+    from PIL import Image, ImageDraw
+    from contact_sheet import font
+    import tempfile
+    tile_w, rows = 460, []
+    with tempfile.TemporaryDirectory() as tmp:
+        for name, clip in cfg["clips"].items():
+            segs, crop = clip["segments"], clip.get("crop", cfg.get("crop"))
+            total = sum((b - a) / r for a, b, r in segs)
+            row = []
+            for label, t in (("start", segs[0][0] + .05), ("mid", source_time(segs, total / 2)), ("end", segs[-1][1] - .05)):
+                png = os.path.join(tmp, f"{name}-{label}.png")
+                vf = (f"crop={crop}," if crop else "") + f"scale={tile_w}:-2"
+                subprocess.run(["ffmpeg", "-v", "error", "-y", "-ss", f"{t:.3f}", "-i", cfg["source"], "-frames:v", "1", "-vf", vf, png], check=True)
+                row.append((f"{name}  {label} {t:.2f}s", Image.open(png).convert("RGB")))
+            rows.append(row)
+        tile_h = rows[0][0][1].height
+        sheet = Image.new("RGB", (3 * (tile_w + 4), len(rows) * (tile_h + 4)), "#222")
+        label_font = font(16)
+        for y, row in enumerate(rows):
+            for x, (label, im) in enumerate(row):
+                d = ImageDraw.Draw(im)
+                d.rectangle([0, 0, d.textlength(label, font=label_font) + 12, 24], fill=(0, 0, 0))
+                d.text((6, 3), label, fill=(255, 255, 255), font=label_font)
+                sheet.paste(im, (x * (tile_w + 4), y * (tile_h + 4)))
+        sheet.save(out, quality=85)
+    print(f"{out}: {len(rows)} clips x start/mid/end")
 
 
 def cut(cfg, name):
@@ -67,6 +109,9 @@ def main():
     args = sys.argv[2:]
     if args[:1] == ["--map"]:
         print(clip_time(cfg["clips"][args[1]]["segments"], float(args[2])))
+        return
+    if args[:1] == ["--preview"]:
+        preview(cfg, os.path.abspath(args[1]) if len(args) > 1 else os.path.join(cfg["_dir"], "preview.jpg"))
         return
     if args[:1] == ["--list"]:
         for name, clip in cfg["clips"].items():

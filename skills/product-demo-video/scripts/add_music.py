@@ -12,6 +12,13 @@ Fades in and out, loudness-normalises to background level, writes the page's mus
 import argparse, os, subprocess
 
 
+def write_bed(track, offset, duration, out, fade_in=1.2, fade_out=3, lufs=-20):
+    af = (f"afade=t=in:d={fade_in},afade=t=out:st={duration - fade_out}:d={fade_out},"
+          f"loudnorm=I={lufs}:TP=-2:LRA=11")
+    subprocess.run(["ffmpeg", "-v", "error", "-y", "-ss", str(offset), "-t", str(duration), "-i", track,
+                    "-af", af, "-ar", "48000", "-c:a", "aac", "-b:a", "192k", out], check=True)
+
+
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--track", required=True)
@@ -25,10 +32,7 @@ def main():
     ap.add_argument("--video-out")
     a = ap.parse_args()
 
-    af = (f"afade=t=in:d={a.fade_in},afade=t=out:st={a.duration - a.fade_out}:d={a.fade_out},"
-          f"loudnorm=I={a.lufs}:TP=-2:LRA=11")
-    subprocess.run(["ffmpeg", "-v", "error", "-y", "-ss", str(a.offset), "-t", str(a.duration), "-i", a.track,
-                    "-af", af, "-ar", "48000", "-c:a", "aac", "-b:a", "192k", a.page_out], check=True)
+    write_bed(a.track, a.offset, a.duration, a.page_out, a.fade_in, a.fade_out, a.lufs)
     print("music ->", a.page_out)
     if a.video_in and a.video_out:
         tmp = a.video_out + ".tmp.mp4"

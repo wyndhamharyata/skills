@@ -56,7 +56,7 @@ mark{background:none;color:inherit}
 .lights b:nth-child(3){background:#28C840}
 #lens{flex:1;position:relative;overflow:hidden;background:#F2F2F2}
 #swap{position:absolute;inset:0;transform-origin:50% 50%}
-#zoom{position:absolute;left:0;top:0;transform-origin:0 0}
+#zoom{position:absolute;left:0;top:0;transform-origin:0 0;overflow:hidden}
 #zoom .media{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;opacity:0}
 #win.phone{padding:14px;background:linear-gradient(150deg,#2c313c,#0c0e13 35%,#171a21 70%,#2a2f39)}
 #win.phone #lens{background:#000}
@@ -329,7 +329,7 @@ body.cam #cam{display:flex}
 .st-terminal #bar::after{content:" — preview";color:#7D8590;white-space:pre}
 .st-terminal .lights{display:none}
 .st-terminal .cap .col{left:1290px;top:136px;width:582px}
-.st-terminal.wide .cap .col{left:324px;top:950px;width:1548px}
+.st-terminal.wide .cap .col{left:500px;top:942px;width:1372px}
 .st-terminal .eyebrow{font-size:18px;color:#E6EDF3;gap:12px}
 .st-terminal .eyebrow::before{content:"❯";color:var(--accent);font-weight:700}
 .st-terminal .eyebrow span{color:#7D8590}
@@ -341,12 +341,12 @@ body.cam #cam{display:flex}
 .st-terminal .body::before{content:"// ";color:#6E7681}
 .st-terminal.wide .cap .body{max-width:960px;margin-top:12px}
 .st-terminal .chips{margin-top:30px}
-.st-terminal.wide .chips{position:absolute;left:1020px;top:46px;margin:0}
+.st-terminal.wide .chips{margin-top:16px}
 .st-terminal .chip{font-size:18px;gap:12px;padding:10px 16px 10px 14px;background:color-mix(in srgb,var(--accent) 12%,transparent);box-shadow:inset 3px 0 0 var(--accent)}
 .st-terminal .chip i{display:none}
 .st-terminal .chip::before{content:"[ ok ]";color:var(--accent);font-weight:700}
 .st-terminal #cam{left:1452px}
-.st-terminal.wide #cam{left:48px}
+.st-terminal.wide #cam{left:48px;top:806px}
 .st-terminal .hero-pre{display:block;left:240px;right:auto;top:250px;text-align:left;font:24px var(--mono);color:#8B949E}
 .st-terminal .hero-pre::before{content:"~ ❯ ";color:var(--accent)}
 .st-terminal .hero-title{left:240px;right:auto;top:300px;text-align:left;font:700 108px var(--mono);letter-spacing:-.045em;white-space:pre}
@@ -651,9 +651,11 @@ function apply(t) {
 
   const D = TP.swap;
   CHAPTERS.forEach((ch, i) => {
-    const el = ch.vid.el, pin = i ? easeIO(ramp(t, ch.g0 - D, D)) : 1;
+    const el = ch.vid.el, nxt = CHAPTERS[i + 1], pin = i ? easeIO(ramp(t, ch.g0 - D, D)) : 1;
+    // Once the next chapter fully covers this clip, hide it: a slid-out or stale frame would show in letterboxed panes.
+    if (nxt && t >= nxt.g0) { el.style.opacity = 0; return; }
     if (TP.transition === 'slide') {
-      const nxt = CHAPTERS[i + 1], pout = nxt ? easeIO(ramp(t, nxt.g0 - D, D)) : 0;
+      const pout = nxt ? easeIO(ramp(t, nxt.g0 - D, D)) : 0;
       el.style.opacity = pin > 0 ? 1 : 0;
       el.style.transform = `translateX(${(1 - pin) * 100 - pout * 30}%)`;
     } else {
