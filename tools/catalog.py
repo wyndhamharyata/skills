@@ -86,6 +86,10 @@ def load():
 def marketplace(skills):
     plugins = [{"name": s["name"], "description": summary(s), "source": "./", "strict": False,
                 "skills": [f"./skills/{s['name']}"]} for s in skills]
+    # A skill's hooks/hooks.json becomes its plugin's hooks (paths in it are relative to the repo root).
+    for p in plugins:
+        if os.path.exists(os.path.join(SKILLS, p["name"], "hooks", "hooks.json")):
+            p["hooks"] = f"./skills/{p['name']}/hooks/hooks.json"
     return json.dumps({**MARKET, "plugins": plugins}, indent=2, ensure_ascii=False) + "\n"
 
 

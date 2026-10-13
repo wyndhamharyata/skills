@@ -15,186 +15,66 @@ face and voice on top. The same page renders, frame-exact, to an MP4.
 
 Two settings change the feel without touching the content. The **style** sets the look and layout (seven,
 from a dark launch look to a code-editor look). The **tempo** sets the pace, from calm to fast. Let the user
-choose both from stills of their own footage (step 5).
+choose both from stills of their own footage.
 
 This approach exists because the obvious one, ffmpeg zoompan with highlight boxes drawn over the UI, looked
 amateur and was rejected. Captions beside the product, plus a camera that frames the action, look like a real
 launch video. Don't draw rectangles or labels over the UI.
 
-## Tools in this skill
+## How to run it: `demo.py`, nothing else
 
-Paths are relative to this skill's folder. **Run these scripts; don't rebuild them.** Each one makes a decision
-(a crop, a cut, a zoom, a check) that a model would otherwise work out from images, more slowly and less
-reliably. If a script's suggestion is wrong, change the one value and say why in `NOTES.md`; don't re-derive it.
+One script drives the whole run. Each command does every scripted step up to the next decision and ends with a
+**NEXT** block that says exactly what to do: which images to look at, what to ask the user, which helpers to
+start, and the next command. Do that, run the command, repeat.
 
-| Step | Script | What it does |
+```sh
+python3 <this skill>/scripts/demo.py new "<recording>" --name <product>     # then follow NEXT
+python3 <this skill>/scripts/demo.py next <project>                         # where a run stands (resume)
+```
+
+`new` puts the project next to the recording as `<product>-demo-<date>` (no spaces) unless the user named a
+folder (`--dir`). The run, in turns:
+
+| Command | It does | You then |
 | --- | --- | --- |
-| 1 | `scripts/find_windows.py` | Finds every window on screen, its content crop below the title bar, and the Dock or other windows covering an edge |
-| 1 | `scripts/contact_sheet.py` | Time-labelled frame grids; `--crop` to one window; `--grid` adds 0.1 gridlines |
-| 1 | `scripts/activity.py` | Change per sample in a region: idle spans, and when something happens there; `--ref` times a pop-up |
-| 3 | `scripts/suggest_cuts.py` | Turns a chapter's rough source range into segments: trims idle, speeds up long continuous change, keeps margins; `--clips` writes them into `clips.json` |
-| 3 | `scripts/cut_clips.py` | `--preview` shows every clip's start, middle and end before cutting; then cuts; `--map`/`--list` convert source time ↔ clip time |
-| 3 | `scripts/cursor_track.py` | Cursor position and changed areas per sample in the cut clips, for the camera tools |
-| 4 | `scripts/cutout.py` | Background-removed PNG of a UI element for the intro |
-| 5 | `scripts/make_config.py` | Builds `page/demo.config.js` from `clips.json`, `work/page.json` and `work/chapters/*.json`, and lists the claims in `work/claims.md` |
-| 5 | `scripts/render.mjs --auto-cams --write` | Camera moves from the cursor traces, framed for the chosen style, written into the config |
-| 5 | `scripts/render.mjs --lint` | Config errors, overlapping or clipped text, overlays hidden by captions, the Loom spot, and the cursor leaving the view. Seconds, no images |
-| 5 | `scripts/check_claims.py` | Reads the text on screen at each claim's time (macOS text recognition) and flags numbers and words that aren't there |
-| 6 | `scripts/render.mjs --stills auto` | Renders the moments worth checking and writes one labelled sheet per chapter (`--chapter n` for one) |
-| 6 | `scripts/render.mjs` | `--timeline` for chapter times, `--stills … --style all` for the look sheet, `--out` for the MP4 |
-| 7 | `scripts/music_beds.py` | `--style`/`--tempo` picks shortlist tracks, downloads them and writes one bed per track, aligned to chapter 1 |
-| 7 | `scripts/music_catalog.py`, `scripts/add_music.py` | Search for a specific mood; mux the chosen bed into the MP4 |
+| `new` | windows and crops, activity in the app and every other window, dead air, desktop flashes, 2–4 sheets, a pre-filled `work/plan.json` | look at the sheets, fill in `plan.json` |
+| `plan` | checks the plan (chapters, every moment outside the app) and prints the question | ask it |
+| `cut` | cuts, speeds up, builds the inset clips, cursor traces, a sheet per clip, intro cut-outs, the helpers' briefs | look at the preview, start one helper per chapter |
+| `build` | config, claims checked with text recognition, camera from claims and cursor, layout and readability checks, the look sheet | ask style, tempo and music in one question |
+| `build --style … --tempo … --music …` | the same in the chosen look, music beds in the background, stills per chapter, stills briefs | start one stills helper per chapter |
+| `finish` | the MP4, music, a spot-check sheet, the hand-over text with absolute paths | look once, send the hand-over |
 
-| Reference | Read it for |
-| --- | --- |
-| `references/subagents.md` | The briefs for parallel work: analysis window, chapter, cut-outs, music, stills check |
-| `references/page-config.md` | Config fields, timing and camera semantics, framing rules |
-| `references/styles.md` | The 7 styles and 4 tempos, what each suits, and their quirks |
-| `references/music.md` | Music sources, licences and the shortlist |
+## Rules
 
-`assets/demo-template.html` is the page engine (copy it to `page/index.html`, never edit content into it), and
-`assets/example.config.js` is a worked config to read when something in a generated config is unclear.
+- **Do what NEXT says, all of it in one turn.** Look at every listed image in the same turn, start every helper
+  in the same turn, and put a progress line in the same turn as a tool call, never in a turn of its own. Every
+  turn costs 15–30 s before anything happens, so a run is judged by its turn count (about 16).
+- **Trust the checks.** `build` and `check` read the screen, the layout and the cursor. When they pass, don't
+  verify by eye; when they fail, they say what to change. Fix only what they list or what a viewer would notice.
+- **Change content in `work/`, never in `page/`.** Captions, chips, steps and cams are in
+  `work/chapters/<clip>.json`; brand, style, tempo, intro and outro in `work/page.json`; chapters, ranges, what
+  happens outside the app and cuts in `work/plan.json`. `page/demo.config.js` is generated and rebuilt.
+- **No extra digging.** Don't open images NEXT didn't list, grab frames with ffmpeg, run `--help`, or read this
+  skill's scripts and references: what a step needs is in its output and in the briefs. Guard hooks (when
+  installed) block these calls and say what to do instead; follow that message.
+- **Ask with the question tool** (`question` in OpenCode, `AskUserQuestion` in Claude Code), with the options NEXT
+  gives, and ask everything for that step in one call.
+- **Fix rounds are capped.** `cut` allows two re-cuts, `build` three fix rounds, each stills helper one. When a
+  cap is reached, `demo.py` says so; carry what's left into the hand-over with `finish --note "…"`.
+- **Without subagents** (a harness that can't start them), do each brief yourself, one after another.
+- Keep the user's recording untouched. Everything goes in the project folder.
 
-Requirements: ffmpeg, ImageMagick (`magick`), Python 3 with Pillow, and Node with `playwright-core`
-(`cd render && npm init -y && npm i playwright-core`). Chromium comes from `$CHROME_PATH`, Playwright's cache or
-Google Chrome. If none is found, run `npx playwright install chromium-headless-shell`. Run `scripts/doctor.sh`
-first; it lists anything missing with the command to install it.
+## When something fails
 
-## Workflow
+A failing command prints `FAILED: <script>` and its last lines. Missing tools: run `scripts/doctor.sh`, which
+prints the install command for each. A wrong crop or window: change `app` or the `outside` entries in
+`plan.json` and run `plan` again. A change the user asks for after the hand-over: edit the files in `work/`,
+then `build` (with the same `--style`) and `finish`.
 
-### 0. Budget, folder, helpers and notes
+## For maintainers
 
-- **One hour by default**, from the start to the first MP4, unless the user sets another limit. Checkpoints:
-  chapter plan sent by about 15 min, clips cut by 25, look chosen by 35, first MP4 by 50. At each, send the user
-  one line: where you are and what's next. If a checkpoint slips, say so and take the simpler path.
-- **The project folder** goes where the user says. Otherwise put it next to the recording, named
-  `<product>-demo-<YYYY-MM-DD>` with no spaces, and never inside a git repository unless the user asks. It holds
-  `page/`, `output/`, `render/` and `work/`.
-- **Context is the cost.** Every step re-reads the whole conversation, and every image you open stays in it. If the
-  conversation already holds a lot of unrelated work, suggest a new session with only the recording path.
-- **Ask with the question tool** when the harness has one (`question` in OpenCode, `AskUserQuestion` in Claude Code):
-  the plan, the look and the music, each with options. Users answer "ask me" to long question lists in text.
-- **Use subagents for the image-heavy work** when the harness can start them (Claude Code, OpenCode). You talk
-  to the user, keep `NOTES.md`, `work/page.json` and the config, and decide. Subagents run the briefs in
-  `references/subagents.md` in parallel and send back text or JSON files. Without subagents, run the same briefs
-  yourself, one after another.
-- **Keep `NOTES.md`** from step 1 onward and update it after every decision:
-
-  ```md
-  # Demo notes
-  - Recording: <path>, <W×H>, <duration> s, <fps> fps
-  - Crop: <W:H:X:Y> from find_windows.py (left out: <e.g. the Dock on the right edge>)
-  - Other windows: <name> <crop>
-  - Beats: <source s> <what happens>, one line each; mark dead air
-  - Outside the app: <source s> <Finder / file picker / notification / other app>: overlay or cut, and why
-  - Chapters: <clip> src <a–b>: <the action> at clip <t>
-  - Look: <style> / <tempo>. Music: <track> at offset <s>, or "beds in music_choices/, waiting for the user"
-  - Open: <questions for the user>
-  - Next: <the next step, exactly>
-  ```
-
-- **Resuming.** On "continue", or in a new session, read `NOTES.md` and start at `Next:`.
-
-### 1. Understand the recording (steps 1–2 together: about 15 min)
-
-1. `ffprobe` the file, then `find_windows.py <recording>`. It gives the app's content crop, every other window's
-   crop, and any edge the Dock or another window covers.
-2. Make **one** 1 frame/s sheet of the whole screen and look at it: which window is the app and roughly what
-   happens when. Every window `find_windows.py` found besides the app is a place where part of the story may happen.
-3. Start the **analysis** briefs in parallel, one per time window of the recording (2–3). Each runs `activity.py`
-   on the app **and on every other window's crop**, so a click in Finder or a file picker shows up as activity
-   there, not as something to notice in an image.
-4. **Budget:** at most 5 close-up sheets across the whole step, each with several timestamps and cropped to the
-   region in question, and each settling a cut range or which chapters exist. Don't read on-screen labels here.
-   A fact that only changes wording ("double-clicked or dragged?") goes to the user in the plan.
-5. Stop when every candidate chapter has a source range and the clip time of its action.
-
-### 2. Plan chapters, and confirm
-
-Pick 3–6 chapters. Each is one feature the viewer should remember, with a one-word **label**, a short **title**, a
-one-sentence **body**, a rough source range and 1–3 **chips**. Copy states only what is visible. About 45 s of
-usable footage gives a page of about 65 s at the steady tempo, 48 s at fast and 73 s at calm.
-
-Then ask the user, with the question tool, before cutting. The plan always has these three parts:
-
-1. **Chapters:** label, what it shows, source range.
-2. **Outside the app:** every moment in another window, file picker, share sheet, notification or the desktop,
-   each marked *overlay* or *cut* with a reason. A moment that starts or completes a feature ("double-click a PDF
-   and it opens here", "choose your own cover") is an overlay by default. Never leave this part out; write "none"
-   if there are none. Leaving Finder out has been the most common miss.
-3. **Questions:** wording facts and anything you'd otherwise investigate.
-
-### 3. Cut the clips
-
-1. For each chapter, `suggest_cuts.py <recording> --crop … --range a-b [--drop …] --clips clips.json --name <clip>`
-   writes its segments. Overlay clips get their own `crop` and the same first source second as their chapter, plus
-   an `"overlay"` key (see `make_config.py`).
-2. `cut_clips.py clips.json --preview` and look at the one sheet: every tile edge is the app, every middle tile
-   shows the chapter's action, no pop-ups. Fix and re-run until it's right, then cut.
-3. `cursor_track.py page/0*.mp4 --out work/cursor`.
-
-### 4. Cut-outs (a subagent, alongside step 5)
-
-`cutout.py` pulls 4–7 recognisable UI pieces from a clean frame: covers, cards, a key button, app icons. Similar
-shapes (width ÷ height about 1.3–1.8), and `intro.cutoutWidth` so the row spans about 60–70% of the stage.
-
-### 5. Build the page
-
-1. Copy `assets/demo-template.html` to `page/index.html`, and write `work/page.json` (brand, accent, style, tempo,
-   frame type, intro, outro and the chapter order; format in `make_config.py`).
-2. Run one **chapter** brief per chapter, in parallel. Each writes `work/chapters/<clip>.json`.
-3. `make_config.py <project>` builds `page/demo.config.js` and `work/claims.md`.
-4. `render.mjs ../page/index.html --auto-cams --write` sets the camera from the cursor traces.
-5. `render.mjs ../page/index.html --lint` and `check_claims.py work/claims.md`. Fix every ERROR and MISSING line
-   before any still: move a cam, an overlay's `at`, or fix the caption to what the screen says.
-6. **Pick the look with the user**, unless they named one: `render.mjs … --stills <mid-chapter t> --style all
-   --stills-dir ../looks`, recommend one or two from `references/styles.md`, and ask with the question tool for a
-   style and a tempo. After a style change, run `--auto-cams --write` and `--lint` again: zooms depend on the style.
-
-### 6. Check with stills, then render
-
-1. Run one **stills** brief per chapter in parallel (`render.mjs … --stills auto --chapter <n>`), and look at
-   `sheet_00-intro-outro.jpg` yourself. Render one still first so the clip frames get extracted once.
-2. Fix the config, then re-run `--lint` and only the stills that changed.
-3. `render.mjs ../page/index.html --out ../output/demo-silent.mp4`, in the background while the music beds are
-   built. Spot-check about 12 frames of the MP4 in one montage.
-
-### 7. Music
-
-You can't hear audio. `music_beds.py --style <style> --tempo <tempo> --duration <page duration> --intro-end
-<chapter 1 start> --out music_choices` picks shortlist tracks, downloads them and builds aligned beds (both numbers
-from `--timeline`). For a mood the user named, add tracks from `music_catalog.py` instead.
-
-If the user **asked you to add music**, mux the best match and offer the other beds as one-command swaps. If you're
-only **offering** music, ask with the question tool which bed to use. Mux with `add_music.py --track … --offset
-<from the table> --duration … --page-out page/music.m4a --video-in output/demo-silent.mp4 --video-out
-output/demo.mp4`, and add `music: {src: 'music.m4a', volume: .35}` to `work/page.json` and the config. Re-run the
-beds and the mux whenever the tempo changes. For an Incompetech track, give the credit line `music_catalog.py` prints.
-
-### 8. Hand over
-
-Tell the user, briefly, with **absolute paths** in backticks (they copy them into `open` and `cp`):
-- the MP4 and the page, and the specs;
-- the style and tempo, and that they're one line each in the config (or **S** and **T** live);
-- how to record: open the page in Chrome, **F** full screen, **C** camera spot, **Space** play, **M** music.
-  Loom only captures the music if computer audio is on;
-- what was cut or sped up, which moments outside the app became overlays, and any claims to verify;
-- how to adjust: edit `work/` or the config, then `--lint` and stills;
-- the folder's size, and an offer to delete `page/frames/`, `work/` and `looks/` (rebuilt when needed).
-
-Set `Next:` in `NOTES.md` to "done", and offer to open Finder on the folder.
-
-## Working style
-
-- Users of this skill usually want results fast and get frustrated by long loops. Check with stills before any
-  full render. Never re-render the whole video to test one framing change.
-- Report in plain words: what the viewer will see, not filter names.
-- **Every image you look at stays in the conversation** and is re-read on every later turn. Answer each visual
-  question with one montage, not separate frames. Crop to the region in question (`--crop`) instead of reading
-  a whole stage, and don't open an image again once you've described it in `NOTES.md`.
-- Keep tool output short: tables and one-line results, not logs or long directory listings.
-- When a still looks wrong, find which element paints it before changing the config. A frame that is right on
-  its own but wrong after other frames is a page bug, not a stale render; fix it in the template.
-- Keep the user's raw recording untouched. All outputs go in the project folder.
-- ffmpeg builds may lack `drawtext`, and ImageMagick may have no default font (`unable to read font`).
-  Label images with Pillow (`contact_sheet.py` does) or pass `-font /path/to/font.ttf`.
+`demo.py` drives the lower-level scripts in `scripts/` (find_windows, activity sheets, suggest_cuts, cut_clips,
+cursor_track, cutout, make_config, check_claims, render.mjs, music_beds, add_music); each has usage at its top.
+`references/page-config.md` describes the generated config, `references/styles.md` the styles and tempos,
+`references/music.md` the music sources and shortlist. `scripts/guard.py` and `hooks/` are the guard hooks
+(`install.sh` installs them), and `tools/audit_run.py` in the repo measures a run's turns and rule breaks.

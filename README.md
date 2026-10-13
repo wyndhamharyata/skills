@@ -42,6 +42,18 @@ Useful options (`./install.sh --help` lists them all):
 
 The script never overwrites a skill it didn't install. Use `--force` to replace one (the old copy is kept as a backup).
 
+`product-demo-video` also installs a guard, `scripts/guard.py`, that blocks tool calls breaking the skill's rules
+(reading its scripts, grabbing single frames, hand-editing the generated page) while a demo is in progress, and
+says what to run instead. It does nothing when no demo is active.
+
+| Agent | How the guard is installed |
+| --- | --- |
+| Claude Code | A `PreToolUse` hook added to `~/.claude/settings.json` (the rest of the file is kept) |
+| OpenCode | `hooks/opencode-guard.js` linked as `~/.config/opencode/plugins/product-demo-video-guard.js` |
+| Codex, pi | Not available; the skill works without it |
+
+`--uninstall` removes both, and `--dry-run` shows the change first. The Claude Code plugin below includes the hook.
+
 ### Agent-native installs
 
 Use these instead of the script if you prefer each agent's own package manager. Don't use both for the same

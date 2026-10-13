@@ -11,13 +11,15 @@ room for the whole demo, sets the offset so that lift lands on chapter 1 (--intr
 --timeline), and writes <out>/<track>.m4a at the demo length with the same fades and loudness as add_music.py.
 A lift under 3 dB means the track is flat; the bed then starts at the track's beginning.
 It also prints a rough pulse: the beat period found by autocorrelation and how regular it is (0–1).
-You can't hear the beds, so hand the folder to the user and mux only the one they pick:
-  add_music.py --track <track> --offset <offset> --duration … --page-out page/music.m4a --video-in … --video-out …
+You can't hear the beds, so hand the folder to the user and mux only the one they pick. <out>/beds.json lists
+each bed with its source track and offset; mux from the source track with that offset (the bed itself is already
+trimmed, so muxing a bed takes --offset 0):
+  add_music.py --track <source track> --offset <offset> --duration … --page-out page/music.m4a --video-in … --video-out …
 With --style/--tempo and no tracks, it takes the best matches from the shortlist in references/music.md (tracks
 the maintainer has heard first), downloads them into --src (default music_src) and builds their beds.
 Needs ffmpeg.
 """
-import argparse, math, os, re, subprocess, sys, urllib.parse, urllib.request
+import argparse, json, math, os, re, subprocess, sys, urllib.parse, urllib.request
 from array import array
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
@@ -78,6 +80,9 @@ def pulse(frames, start, duration):
     return bpm, best
 
 
+SOURCES = {}
+
+
 def shortlist(style, tempo, count, src):
     # Rows of the Shortlist table: Mood | Suits | Track | Source | Heard.
     text = open(os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "references", "music.md")).read()
@@ -101,6 +106,7 @@ def shortlist(style, tempo, count, src):
             with urllib.request.urlopen(req, timeout=60) as r, open(path, "wb") as f:
                 f.write(r.read())
         print(f"picked {title} ({source})")
+        SOURCES[path] = source
         paths.append(path)
     return paths
 
@@ -128,6 +134,7 @@ def main():
         os.makedirs(a.out, exist_ok=True)
 
     print(f"{'track':28} {'length':>7} {'lift at':>8} {'lift dB':>8} {'offset':>7} {'bpm':>5} {'pulse':>6}  bed")
+    beds = []
     for arg in a.tracks:
         path, _, forced = arg.partition("@")
         frames = decode(path)
@@ -146,6 +153,15 @@ def main():
             write_bed(path, offset, a.duration, bed, lufs=a.lufs)
         lift_text = f"{lift:.2f}" if lift is not None else "none"
         print(f"{name[:28]:28} {length:7.1f} {lift_text:>8} {rise:8.1f} {offset:7.2f} {bpm:5.0f} {regularity:6.2f}  {bed}")
+        if bed and bed != "too short":
+            beds.append({"name": name, "track": os.path.abspath(path), "offset": round(offset, 2), "bed": os.path.abspath(bed),
+                         "lift_db": round(rise, 1), "bpm": round(bpm), "source": SOURCES.get(path, "")})
+    if a.out and beds:
+        with open(os.path.join(a.out, "beds.json"), "w") as f:
+            json.dump(beds, f, indent=1)
+        b = beds[0]
+        print(f"mux one: add_music.py --track {b['track']} --offset {b['offset']} --duration {a.duration:g} "
+              f"--page-out page/music.m4a --video-in output/demo-silent.mp4 --video-out output/demo.mp4  (offsets: beds.json)")
 
 
 if __name__ == "__main__":

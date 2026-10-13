@@ -13,7 +13,8 @@
       "strict": false,
       "skills": [
         "./skills/product-demo-video"
-      ]
+      ],
+      "hooks": "./skills/product-demo-video/hooks/hooks.json"
     }
   ]
 }

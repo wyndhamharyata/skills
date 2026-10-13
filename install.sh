@@ -19,6 +19,10 @@ Installs every skill in skills/ (or only the ones named) into each agent's skill
   opencode   ~/.agents/skills
   pi         ~/.agents/skills
 
+product-demo-video also gets a guard that blocks tool calls breaking its rules while a demo is in progress:
+a PreToolUse hook in ~/.claude/settings.json (claude) and a plugin in ~/.config/opencode/plugins (opencode).
+With --project they go to DIR/.claude/settings.json and DIR/.opencode/plugins. --uninstall removes them.
+
 Options:
   --agent LIST    claude, codex, opencode, pi or all (default: all). Comma-separated or repeated.
   --dir PATH      also install into PATH, for any other agent that reads <PATH>/<skill>/SKILL.md
@@ -52,16 +56,17 @@ while [ $# -gt 0 ]; do
   esac
 done
 
-targets=()
+targets=() hook_claude=0 hook_opencode=0
 add_target() { local t; for t in ${targets[@]+"${targets[@]}"}; do [ "$t" = "$1" ] && return; done; targets+=("$1"); }
 [ -z "$agents" ] && [ ${#dirs[@]} -eq 0 ] && agents=all
 IFS=',' read -r -a agent_list <<< "${agents#,}"
 for a in ${agent_list[@]+"${agent_list[@]}"}; do
   case "$a" in
     "") ;;
-    all) add_target "$base/.claude/skills"; add_target "$base/.agents/skills" ;;
-    claude) add_target "$base/.claude/skills" ;;
-    codex|opencode|pi) add_target "$base/.agents/skills" ;;
+    all) add_target "$base/.claude/skills"; add_target "$base/.agents/skills"; hook_claude=1; hook_opencode=1 ;;
+    claude) add_target "$base/.claude/skills"; hook_claude=1 ;;
+    opencode) add_target "$base/.agents/skills"; hook_opencode=1 ;;
+    codex|pi) add_target "$base/.agents/skills" ;;
     *) echo "Unknown agent: $a (use claude, codex, opencode, pi or all; --dir for anything else)" >&2; exit 2 ;;
   esac
 done
@@ -119,6 +124,92 @@ for target in "${targets[@]}"; do
     if [ $dry -eq 1 ]; then echo "  would have ${verb} $s"; else echo "  $verb $s"; fi
   done
 done
+
+# product-demo-video's guard (scripts/guard.py) blocks tool calls that break the skill's rules while a demo
+# is in progress. Claude Code runs it as a PreToolUse hook in settings.json; OpenCode through a plugin file.
+GUARDED=product-demo-video
+
+# Add (or with "remove", take out) the guard hook in a Claude Code settings.json, keeping everything else.
+claude_hook() {
+  python3 - "$1" "$2" "$3" "$dry" <<'PY'
+import json, os, sys
+path, guard, action, dry = sys.argv[1], sys.argv[2], sys.argv[3], sys.argv[4] == "1"
+settings = {}
+if os.path.exists(path):
+    try:
+        with open(path, encoding="utf-8") as f:
+            settings = json.load(f)
+    except ValueError as e:
+        sys.exit(f"  skipped the hook: {path} isn't valid JSON ({e})")
+before = json.dumps(settings, sort_keys=True)
+hooks = settings.setdefault("hooks", {})
+ours = lambda h: "product-demo-video/scripts/guard.py" in str(h.get("command", ""))
+groups = []
+for g in hooks.get("PreToolUse", []):
+    rest = [h for h in g.get("hooks", []) if not ours(h)]
+    if len(rest) == len(g.get("hooks", [])):
+        groups.append(g)
+    elif rest:
+        groups.append({**g, "hooks": rest})
+if action == "add":
+    groups.append({"matcher": "Bash|Read|Write|Edit|MultiEdit",
+                   "hooks": [{"type": "command", "command": f'python3 "{guard}" --claude', "timeout": 10}]})
+if groups:
+    hooks["PreToolUse"] = groups
+else:
+    hooks.pop("PreToolUse", None)
+if not hooks:
+    settings.pop("hooks")
+if json.dumps(settings, sort_keys=True) == before:
+    print(f"  guard hook {'already in' if action == 'add' else 'not in'} {path}")
+elif dry:
+    print(f"  would: {action} the guard hook in {path}")
+else:
+    real = os.path.realpath(path)
+    os.makedirs(os.path.dirname(real), exist_ok=True)
+    with open(real + ".tmp", "w", encoding="utf-8") as f:
+        f.write(json.dumps(settings, indent=2, ensure_ascii=False) + "\n")
+    os.replace(real + ".tmp", real)
+    print(f"  {'added' if action == 'add' else 'removed'} the guard hook in {path}")
+PY
+}
+
+if [ $hook_claude -eq 1 ] || [ $hook_opencode -eq 1 ]; then
+  for s in "${skills[@]}"; do
+    [ "$s" = "$GUARDED" ] || continue
+    if [ $hook_claude -eq 1 ]; then
+      echo "$base/.claude/settings.json"
+      if [ $uninstall -eq 1 ]; then action=remove; else action=add; fi
+      claude_hook "$base/.claude/settings.json" "$base/.claude/skills/$s/scripts/guard.py" "$action" || true
+    fi
+    if [ $hook_opencode -eq 1 ]; then
+      if [ "$base" = "$HOME" ]; then plugins="${XDG_CONFIG_HOME:-$HOME/.config}/opencode/plugins"; else plugins="$base/.opencode/plugins"; fi
+      plugin="$plugins/$s-guard.js" src="$SRC/$s/hooks/opencode-guard.js"
+      echo "$plugins"
+      mine=0
+      if [ -L "$plugin" ]; then [ "$(readlink "$plugin")" = "$src" ] && mine=1
+      elif [ -f "$plugin" ] && grep -qF "// $MARK $SRC" "$plugin"; then mine=1; fi
+      if [ $uninstall -eq 1 ]; then
+        if [ $mine -eq 1 ]; then run rm -f "$plugin"; [ $dry -eq 1 ] || echo "  removed $s-guard.js"
+        elif [ -e "$plugin" ]; then echo "  kept $s-guard.js (not installed by this script)"; fi
+        continue
+      fi
+      if [ -e "$plugin" ] || [ -L "$plugin" ]; then
+        if [ $mine -eq 1 ]; then run rm -f "$plugin"
+        elif [ $force -eq 1 ]; then run mv "$plugin" "$plugin.bak-$(date +%Y%m%d%H%M%S)"
+        else echo "  skipped $s-guard.js: $plugin already exists and isn't from this repo (use --force to replace it)"; continue; fi
+      fi
+      run mkdir -p "$plugins"
+      if [ $mode = link ]; then
+        run ln -s "$src" "$plugin"
+      else
+        run cp "$src" "$plugin"
+        if [ $dry -eq 0 ]; then printf '\n// %s %s\n' "$MARK" "$SRC" >> "$plugin"; fi
+      fi
+      if [ $dry -eq 1 ]; then echo "  would have installed $s-guard.js"; else echo "  installed $s-guard.js"; fi
+    fi
+  done
+fi
 
 if [ $uninstall -eq 0 ] && [ $check -eq 1 ] && [ $dry -eq 0 ]; then
   for s in "${skills[@]}"; do

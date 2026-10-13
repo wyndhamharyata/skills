@@ -10,9 +10,11 @@ Grabs frames at t-0.3, t, t+0.3, OCRs them and checks that every number in the c
 its words (4+ letters) are on screen. Verdicts: OK, CHECK (numbers or words weak), MISSING (a number
 is not on screen; exit code 1). Wrong numbers are listed with the OCR lines that hold nearby text.
 OCR: macOS Vision (Swift helper compiled once into ~/.cache/product-demo-video/ocr), else tesseract.
+--json writes every verdict with the claim's box on screen (clip fractions), which render.mjs uses to aim
+the camera (--auto-cams) and to check the viewer can see it (--lint). Normally run by demo.py.
 Needs ffmpeg.
 """
-import argparse, hashlib, os, re, shutil, subprocess, sys, tempfile
+import argparse, hashlib, json, os, re, shutil, subprocess, sys, tempfile
 from pathlib import Path
 
 SWIFT = r"""
@@ -27,8 +29,13 @@ for path in CommandLine.arguments.dropFirst() {
     req.usesLanguageCorrection = false
     try? VNImageRequestHandler(cgImage: cg, options: [:]).perform([req])
     for obs in req.results ?? [] {
-        if let top = obs.topCandidates(1).first { print(top.string) }
+        // x0 y0 x1 y1 (0-1, top-left origin), a tab, then the text
+        if let top = obs.topCandidates(1).first {
+            let b = obs.boundingBox
+            print(String(format: "%.4f %.4f %.4f %.4f\t", b.minX, 1 - b.maxY, b.maxX, 1 - b.minY) + top.string)
+        }
     }
+    print("\u{1E}")
 }
 """
 
@@ -52,15 +59,24 @@ def build_vision():
 
 
 def ocr_engine():
+    # Returns one list per image of (text, box): box is [x0, y0, x1, y1] in 0-1 image fractions, or None (tesseract).
     vision = build_vision()
     if vision:
-        return lambda pngs: subprocess.run(vision + pngs, capture_output=True, text=True).stdout.splitlines()
+        def run(pngs):
+            out = subprocess.run(vision + pngs, capture_output=True, text=True).stdout
+            pages = []
+            for page in out.split("\x1e")[:len(pngs)]:
+                items = []
+                for line in page.strip("\n").splitlines():
+                    box, _, text = line.partition("\t")
+                    items.append((text, [float(v) for v in box.split()]))
+                pages.append(items)
+            return pages
+        return run
     if shutil.which("tesseract"):
         def tess(pngs):
-            out = []
-            for p in pngs:
-                out += subprocess.run(["tesseract", p, "-", "--psm", "11"], capture_output=True, text=True).stdout.splitlines()
-            return out
+            return [[(l, None) for l in subprocess.run(["tesseract", p, "-", "--psm", "11"], capture_output=True,
+                                                       text=True).stdout.splitlines()] for p in pngs]
         return tess
     return None
 
@@ -106,7 +122,7 @@ def check(text, lines):
     have_nums = numbers(screen) | {n.rstrip("%") for n in numbers(screen)}
     nums = numbers(text)
     miss_nums = [n for n in nums if n not in have_nums]
-    words = {w.lower().removesuffix("s") for w in WORD.findall(text)}
+    words = claim_words(text)
     low = screen.lower()
     found = [w for w in words if w in low]
     frac = len(found) / len(words) if words else 1
@@ -125,6 +141,37 @@ def check(text, lines):
     return verdict, miss_nums, near, frac
 
 
+def claim_words(text):
+    # Words of 4+ letters; a claim made only of short words ("PDF", "Dark") checks those instead.
+    words = WORD.findall(text) or re.findall(r"[^\W\d_]{2,}", text)
+    return {w.lower().removesuffix("s") if len(w) > 3 else w.lower() for w in words}
+
+
+def locate(text, items):
+    # The box around the screen lines that carry the claim: for each number its best line, else the lines with
+    # most of its words.
+    nums, words = numbers(text), claim_words(text)
+    def score(t):
+        l = norm(t).lower()
+        return 2 * len(nums & numbers(l)) + sum(w in l for w in words)
+    picked = []
+    for n in nums:
+        best = max((it for it in items if it[1] and n in numbers(it[0])), key=lambda it: score(it[0]), default=None)
+        if best and best not in picked:
+            picked.append(best)
+    if not nums:
+        need = max(1, (len(words) + 1) // 2)
+        picked = [it for it in items if it[1] and score(it[0]) >= need]
+        if not picked:
+            best = max((it for it in items if it[1]), key=lambda it: score(it[0]), default=None)
+            picked = [best] if best and score(best[0]) else []
+    if not picked:
+        return None, 0
+    boxes = [it[1] for it in picked]
+    return ([round(min(b[0] for b in boxes), 4), round(min(b[1] for b in boxes), 4),
+             round(max(b[2] for b in boxes), 4), round(max(b[3] for b in boxes), 4)], sum(score(it[0]) for it in picked))
+
+
 def close(n, have):
     a = n.rstrip("%")
     for h in have:
@@ -138,6 +185,8 @@ def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("notes", nargs="?", help="NOTES.md with '- \"text\" -> clip at t' lines")
     ap.add_argument("--claim", action="append", default=[], help="text|clip|t (repeatable)")
+    ap.add_argument("--json", help="also write the verdicts and each claim's box on screen (clip fractions) here")
+    ap.add_argument("--quiet", action="store_true", help="don't print OK lines")
     a = ap.parse_args()
 
     claims = parse_notes(a.notes) if a.notes else []
@@ -151,24 +200,35 @@ def main():
         print("no OCR engine (swiftc/Vision or tesseract): check the claims by eye on frames from each clip")
         return
 
-    bad = False
+    bad, report = False, []
     with tempfile.TemporaryDirectory() as tmp:
         for text, clip, shown, t in claims:
             label = f'"{text}" {shown} @{t:g}'
             if not os.path.exists(clip):
                 print(f"MISSING {label} — clip not found")
+                report.append({"text": text, "clip": shown, "t": t, "verdict": "MISSING", "box": None, "screen": []})
                 bad = True
                 continue
-            lines = ocr(frames(clip, t, tmp))
+            pages = ocr(frames(clip, t, tmp))
+            lines = [text_ for page in pages for text_, _ in page]
             verdict, miss, near, frac = check(text, lines)
+            # Box from the frame where the claim reads best, preferring the middle one (t itself).
+            located = [locate(text, page) for page in pages]
+            order = [1, 0, 2][:len(located)]
+            box = max((located[i] for i in order), key=lambda r: r[1], default=(None, 0))[0]
+            report.append({"text": text, "clip": shown, "t": t, "verdict": verdict, "box": box, "screen": near[:3]})
             bad |= verdict == "MISSING"
             if verdict == "OK":
-                print(f"OK      {label}")
+                if not a.quiet:
+                    print(f"OK      {label}")
                 continue
             why = f"number {', '.join(miss)} not on screen" if miss else f"only {frac:.0%} of words found"
             print(f"{verdict:<7} {label} — {why}")
             shown_lines = near[:4] or [l.strip() for l in lines if l.strip()][:4]
             print("        screen has: " + " | ".join(f'"{l}"' for l in shown_lines))
+    if a.json:
+        with open(a.json, "w") as f:
+            json.dump(report, f, indent=1, ensure_ascii=False)
     sys.exit(1 if bad else 0)
 
 

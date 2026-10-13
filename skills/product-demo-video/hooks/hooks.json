@@ -1,0 +1,17 @@
+{
+  "description": "Blocks tool calls that break the product-demo-video rules while a demo project is active",
+  "hooks": {
+    "PreToolUse": [
+      {
+        "matcher": "Bash|Read|Write|Edit|MultiEdit",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python3 \"${CLAUDE_PLUGIN_ROOT}/skills/product-demo-video/scripts/guard.py\" --claude",
+            "timeout": 10
+          }
+        ]
+      }
+    ]
+  }
+}

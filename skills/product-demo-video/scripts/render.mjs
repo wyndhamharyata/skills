@@ -5,7 +5,7 @@
 //   node render.mjs page/index.html --stills 9,20 --style all      # every style, labelled, plus one sheet per moment
 //   node render.mjs page/index.html --timeline --tempo fast        # chapter times for a tempo
 //   node render.mjs page/index.html --stills 9 --cam               # show the Loom camera spot in stills
-//   node render.mjs page/index.html --lint                         # config, layout and camera problems, before any still
+//   node render.mjs page/index.html --lint [--json]                # config, layout, camera and claim problems, before any still
 //   node render.mjs page/index.html --auto-cams --write            # camera moves from the cursor traces, written into the config
 //   node render.mjs page/index.html --stills auto [--chapter 2]    # the moments worth checking, one labelled sheet per chapter
 //   node render.mjs page/index.html --check-cams ../work/cursor    # times the cursor is outside the camera view
@@ -120,22 +120,44 @@ async function checkCams(traces) {
     // A parked cursor (not moving) outside the view matters less than one that is doing something.
     const last = issues[issues.length - 1], kind = out ? (how === 'held' ? 'parked' : 'OUTSIDE') : 'edge';
     if (last && last.chapter === v.chapter && last.kind === kind && t - last.t1 < .45) { last.t1 = t; last.c1 = v.c; continue; }
-    issues.push({chapter: v.chapter, kind, t0: t, t1: t, c0: v.c, c1: v.c, at: `${fx.toFixed(2)},${fy.toFixed(2)}`,
+    issues.push({chapter: v.chapter, clip: clipName(v.clip), kind, t0: t, t1: t, c0: v.c, c1: v.c, at: `${fx.toFixed(2)},${fy.toFixed(2)}`,
       view: `x ${v.x0.toFixed(2)}–${v.x1.toFixed(2)}, y ${v.y0.toFixed(2)}–${v.y1.toFixed(2)}`});
   }
-  // A cursor that flicks past for one sample is faster than any camera; only a stay outside is an error.
-  return issues.map(i => ({level: i.kind === 'OUTSIDE' && i.t1 - i.t0 >= .35 ? 'error' : 'warn',
+  // A cursor that flicks past for one sample is faster than any camera, and while the camera holds on a claim the
+  // claim matters more; only a stay outside otherwise is an error.
+  const claims = loadClaims();
+  const onClaim = i => claims.some(c => clipName(c.clip) === i.clip && c.t - .3 <= i.c1 && c.t + 1 >= i.c0);
+  return issues.map(i => ({level: i.kind === 'OUTSIDE' && i.t1 - i.t0 >= .35 && !onClaim(i) ? 'error' : 'warn',
     text: `cursor ${{OUTSIDE: 'outside', parked: 'parked outside', edge: 'at the edge of'}[i.kind]} the view: ${i.chapter} clip ${i.c0.toFixed(2)}–${i.c1.toFixed(2)} (page ${i.t0.toFixed(1)}–${i.t1.toFixed(1)}), cursor ${i.at}, view ${i.view}`}));
 }
 
+const workDir = path.join(PAGE, '..', 'work');
+const chapterFile = clip => path.join(workDir, 'chapters', clipName(clip) + '.json');
+function loadClaims() {
+  // check_claims.py --json output: each claim's text, clip, clip time, verdict and box on screen (clip fractions).
+  const f = path.join(workDir, 'claims.json');
+  return fs.existsSync(f) ? JSON.parse(fs.readFileSync(f, 'utf8')).filter(c => c.box && c.verdict !== 'MISSING') : [];
+}
+
 async function autoCams(traces) {
-  // One window per hold and about 2 s of play; frame the cursor and whatever changed in it, then keep only real moves.
+  // One window per hold and about 2 s of play. A window with a claim in it frames the claim; otherwise the cursor
+  // and whatever changed near it. Everything is placed in the part of the panel the caption and chips leave free.
   const geo = await page.evaluate(() => window.__geometry()), chs = await page.evaluate(() => window.__chapters());
   const MAX = +opt('--max-zoom', 2.4), [lw, lh] = geo.lensOverVideo, base = Math.max(1, geo.minScale);
-  const clamp = x => Math.max(0, Math.min(1, x));
-  return chs.map(ch => {
-    const tr = traces[clipName(ch.clip)];
-    if (!tr) return {label: ch.label, clip: ch.clip, cams: null};
+  const clamp = x => Math.max(0, Math.min(1, x)), claims = loadClaims();
+  const frameBox = (box, safe, minW, minH) => {
+    const bw = Math.max(box[2] - box[0], minW), bh = Math.max(box[3] - box[1], minH);
+    let S = Math.max(Math.min((safe[2] - safe[0]) * lw / bw, (safe[3] - safe[1]) * lh / bh, MAX), base);
+    if (S < 1.08 && base < 1.08) S = 1;
+    return {S, fx: clamp((box[0] + box[2]) / 2 - ((safe[0] + safe[2]) / 2 - .5) * lw / S),
+      fy: clamp((box[1] + box[3]) / 2 - ((safe[1] + safe[3]) / 2 - .5) * lh / S)};
+  };
+  const out = [];
+  for (const [ci, ch] of chs.entries()) {
+    const tr = traces[clipName(ch.clip)] || {samples: [], changes: []};
+    const mine = claims.filter(c => clipName(c.clip) === clipName(ch.clip));
+    if (!traces[clipName(ch.clip)] && !mine.length) { out.push({label: ch.label, clip: ch.clip, cams: null}); continue; }
+    const safe = await page.evaluate(i => window.__safeArea(i), ci);
     const wins = [], holdLen = {};
     for (const st of ch.steps) {
       if (st[0] === 'hold') { wins.push({c0: st[1] - .3, c1: st[1] + .3, at: st[1], off: 0, hold: true}); holdLen[st[1]] = st[2]; continue; }
@@ -148,6 +170,7 @@ async function autoCams(traces) {
     const cams = [];
     let cur = {S: base, fx: .5, fy: .5};
     wins.forEach((w, i) => {
+      const said = mine.filter(c => w.hold ? Math.abs(c.t - w.at) <= .35 : c.t >= w.c0 - .1 && c.t < w.c1);
       // A moving cursor is the action; a parked one only counts when nothing else changes.
       const inWin = tr.samples.filter(p => p[1] !== null && p[0] >= w.c0 - .2 && p[0] <= w.c1 + .2);
       const boxes = (tr.changes || []).filter(b => b[0] >= w.c0 && b[0] <= w.c1 && (b[3] - b[1]) * (b[4] - b[2]) < .5);
@@ -155,24 +178,35 @@ async function autoCams(traces) {
       const moving = inWin.filter(p => p[3] === 'seen'), pts = moving.length || boxes.length ? moving : inWin;
       const mid = list => list.length ? list.reduce((a, p) => a + p, 0) / list.length : .5;
       let t;
-      if (big) t = {S: base, fx: mid(pts.map(p => p[1])), fy: mid(pts.map(p => p[2]))};   // most of the screen changes: as wide as the style allows
+      const union = list => [Math.min(...list.map(b => b[0])) - .03, Math.min(...list.map(b => b[1])) - .03,
+        Math.max(...list.map(b => b[2])) + .03, Math.max(...list.map(b => b[3])) + .03];
+      let at = w.at, off = i === 0 ? 0 : w.off, ease = w.hold ? .6 : .8;
+      if (said.length) {
+        // The claim plus the action around it; when both don't fit (Pop crops the clip), the claim wins, since the
+        // caption talks about it. The move lands just before the claim's moment.
+        const all = [...said.map(c => c.box), ...moving.map(p => [p[1], p[2], p[1], p[2]]), ...boxes.map(b => b.slice(1))];
+        t = frameBox(union(all), safe, .3, .22);
+        const u = union(all);
+        if ((u[2] - u[0]) * t.S / lw > (safe[2] - safe[0]) + .02 || (u[3] - u[1]) * t.S / lh > (safe[3] - safe[1]) + .02)
+          t = frameBox(union(said.map(c => c.box)), safe, .3, .22);
+        at = w.hold ? w.at : +Math.min(...said.map(c => c.t)).toFixed(2);
+        ease = .6;
+        off = i === 0 && at === w.at ? 0 : -(ease + .1);
+      } else if (big) t = {S: base, fx: mid(pts.map(p => p[1])), fy: mid(pts.map(p => p[2]))};   // most of the screen changes: as wide as the style allows
       else if (pts.length || boxes.length) {
         let x0 = 1, y0 = 1, x1 = 0, y1 = 0;
         for (const p of pts) { x0 = Math.min(x0, p[1]); x1 = Math.max(x1, p[1]); y0 = Math.min(y0, p[2]); y1 = Math.max(y1, p[2]); }
         for (const b of boxes) { x0 = Math.min(x0, b[1]); y0 = Math.min(y0, b[2]); x1 = Math.max(x1, b[3]); y1 = Math.max(y1, b[4]); }
-        const bw = Math.max(x1 - x0 + .12, .2), bh = Math.max(y1 - y0 + .12, .2);
-        let S = Math.max(Math.min(lw / bw, lh / bh, MAX), base);
-        if (S < 1.08) S = 1;
-        t = {S, fx: clamp((x0 + x1) / 2), fy: clamp((y0 + y1) / 2)};
+        t = frameBox([x0 - .06, y0 - .06, x1 + .06, y1 + .06], safe, .2, .2);
       }
       if (!t || (t.S <= 1.001 && cur.S <= 1.001)) return;
       if (Math.abs(t.S - cur.S) < .15 && Math.abs(t.fx - cur.fx) < .08 && Math.abs(t.fy - cur.fy) < .08) return;
-      const off = i === 0 ? 0 : w.off;
-      cams.push([w.at, +off.toFixed(2), +(1 + (t.S - 1) / geo.zoom).toFixed(2), +t.fx.toFixed(2), +t.fy.toFixed(2), w.hold ? .6 : .8]);
+      cams.push([at, +off.toFixed(2), +(1 + (t.S - 1) / geo.zoom).toFixed(2), +t.fx.toFixed(2), +t.fy.toFixed(2), ease]);
       cur = t;
     });
-    return {label: ch.label, clip: ch.clip, cams};
-  });
+    out.push({label: ch.label, clip: ch.clip, cams});
+  }
+  return out;
 }
 
 function writeCams(file, list) {
@@ -225,7 +259,38 @@ async function lint() {
   const traces = loadTraces(traceDir('--lint'));
   if (Object.keys(traces).length) found.push(...await checkCams(traces));
   else add('warn', 'no cursor traces, so the camera was not checked (run cursor_track.py)');
+  // Every claim must be readable on the page: inside the camera view and not under the caption, a chip or an overlay,
+  // for at least 0.6 s around its clip time.
+  const claims = loadClaims();
+  if (claims.length) {
+    const samples = [];
+    for (let t = info.timeline.intro; t < info.timeline.outro; t += .1) {
+      const v = await page.evaluate(x => window.__claimView(x), t);
+      if (v) samples.push(v);
+    }
+    const inside = (b, r) => Math.max(0, Math.min(b[2], r[2]) - Math.max(b[0], r[0])) * Math.max(0, Math.min(b[3], r[3]) - Math.max(b[1], r[1])) / ((b[2] - b[0]) * (b[3] - b[1]) || 1);
+    for (const c of claims) {
+      const near = samples.filter(v => clipName(v.clip) === clipName(c.clip) && v.c >= c.t - .15 && v.c <= c.t + .6);
+      if (!near.length) continue;
+      const seen = near.map(v => ({vis: inside(c.box, v.view), cov: Math.min(1, v.occ.reduce((n, o) => n + inside(c.box, o), 0))}));
+      const good = seen.filter(x => x.vis >= .9 && x.cov <= .1).length;
+      if (good >= Math.min(6, Math.ceil(near.length / 2))) continue;
+      const outside = seen.filter(x => x.vis < .9).length >= seen.filter(x => x.cov > .1).length;
+      found.push({level: 'error', kind: 'claim', clip: clipName(c.clip), t: c.t, why: outside ? 'outside' : 'covered',
+        text: `claim not readable on the page: "${c.text}" (${clipName(c.clip)} clip ${c.t} s) is ${outside ? 'outside the camera view' : 'under the caption, a chip or an overlay'}; readable ${(good / 10).toFixed(1)} s of ${(near.length / 10).toFixed(1)} s`});
+    }
+  } else add('warn', 'no work/claims.json, so claims were not checked on the page (check_claims.py --json)');
   return found;
+}
+
+async function overlayFixes() {
+  const fixes = [];
+  for (let i = 0; ; i++) {
+    const r = await page.evaluate(k => window.__fitOverlay(k), i);
+    if (!r) break;
+    if (r.before > 0 && r.after < r.before) fixes.push(r);
+  }
+  return fixes;
 }
 
 if (argv.includes('--check-cams')) {
@@ -243,7 +308,15 @@ if (argv.includes('--auto-cams')) {
   const result = await autoCams(traces);
   for (const r of result) console.log(r.cams ? `${r.label}: cams: ${JSON.stringify(r.cams)},` : `${r.label}: no trace for ${r.clip}; run cursor_track.py on it`);
   if (argv.includes('--write')) {
-    const problem = writeCams(path.join(PAGE, 'demo.config.js'), result.map(r => r.cams));
+    // Cams set by hand in work/chapters/<clip>.json win; auto cams go to its "auto_cams" and into the config.
+    const list = result.map(r => {
+      const f = chapterFile(r.clip);
+      const ch = fs.existsSync(f) ? JSON.parse(fs.readFileSync(f, 'utf8')) : null;
+      if (ch && ch.cams && ch.cams.length) { console.log(`${r.label}: kept the cams set in ${path.relative(path.join(PAGE, '..'), f)}`); return null; }
+      if (ch && r.cams) { ch.auto_cams = r.cams; fs.writeFileSync(f, JSON.stringify(ch, null, 1) + '\n'); }
+      return r.cams;
+    });
+    const problem = writeCams(path.join(PAGE, 'demo.config.js'), list);
     if (problem) console.log(problem);
     else {
       console.log('written to demo.config.js (previous version in demo.config.js.bak)');
@@ -258,6 +331,12 @@ if (argv.includes('--auto-cams')) {
 if (argv.includes('--lint')) {
   const found = await lint();
   const errors = found.filter(f => f.level === 'error'), warns = found.filter(f => f.level === 'warn');
+  if (argv.includes('--json')) {
+    const hidden = errors.some(f => f.text.includes('hides part of an overlay'));
+    console.log(JSON.stringify({errors, warnings: warns, overlays: hidden ? await overlayFixes() : []}));
+    await browser.close();
+    process.exit(errors.length ? 1 : 0);
+  }
   for (const f of [...errors, ...warns]) console.log(`${f.level === 'error' ? 'ERROR' : 'warn '} ${f.text}`);
   console.log(`lint: ${errors.length} errors, ${warns.length} warnings${errors.length ? '' : ' - ready for stills'}`);
   await browser.close();
