@@ -799,6 +799,41 @@ window.__view = time => {
   return {chapter: ch.label, clip: ch.clip, c: clipAt(ch.segs, time).c, overlay,
     x0: clamp(-x / w), x1: clamp((L.w - x) / w), y0: clamp(-y / h), y1: clamp((L.h - y) / h)};
 };
+// Camera geometry for render.mjs --auto-cams: the lens over the clip's displayed size, and the smallest zoom
+// (above 1 when a style crops the clip to fill its panel).
+window.__geometry = () => ({mode: MODE, minScale: MODE === 'fill' ? Math.max(L.w / V.w, L.h / V.h) : 1,
+  lensOverVideo: [L.w / V.w, L.h / V.h], zoom: TP.zoom});
+// Every chapter's page times, for --stills auto and --lint.
+window.__chapters = () => CHAPTERS.map(ch => ({label: ch.label, clip: ch.clip, g0: ch.g0, g1: ch.g1, steps: ch.steps,
+  cams: (ch.cams || []).map(k => ({c: k[0], g: gOf(ch.segs, k[0], k[1] * TP.hold), settled: gOf(ch.segs, k[0], k[1] * TP.hold) + k[5] * TP.ease})),
+  holds: ch.segs.filter(sg => sg.r === 0).map(sg => ({c: sg.c0, g0: sg.g0, g1: sg.g1})),
+  chips: (ch.chips || []).map(k => ({text: k[2], c: k[0], g: gOf(ch.segs, k[0], k[1] * TP.hold)})),
+  overlays: OVERLAYS.filter(o => o.ch === ch).map(o => ({clip: o.clip, gOut: o.gOut}))}));
+// Layout problems at page time t, for --lint: what covers what, and what runs off the stage.
+window.__lint = time => {
+  apply(time);
+  const shown = el => { for (let e = el; e && e !== design; e = e.parentElement) { const cs = getComputedStyle(e); if (cs.display === 'none' || +cs.opacity < .5) return false; } return true; };
+  const box = el => el.getBoundingClientRect();
+  const overlap = (p, q) => { const w = Math.min(p.right, q.right) - Math.max(p.left, q.left), h = Math.min(p.bottom, q.bottom) - Math.max(p.top, q.top);
+    return w > 2 && h > 2 ? w * h / Math.min(p.width * p.height, q.width * q.height) : 0; };
+  const name = el => (el.textContent || el.className).trim().replace(/\s+/g, ' ').slice(0, 40);
+  const caption = [...document.querySelectorAll('.cap .text > *')].filter(e => shown(e) && e.textContent.trim());
+  const chips = [...document.querySelectorAll('.chip')].filter(shown);
+  const overlays = [...document.querySelectorAll('.overlay')].filter(shown);
+  document.body.classList.add('cam'); const cam = box($('cam')); document.body.classList.remove('cam');
+  const sb = box(stage), out = [];
+  const add = (level, kind, what) => out.push({level, kind, what});
+  for (const c of chips) for (const k of caption) if (overlap(box(c), box(k)) > .05) add('error', 'chip covers caption', `"${name(c)}" over "${name(k)}"`);
+  chips.forEach((c, i) => chips.slice(i + 1).forEach(d => { if (overlap(box(c), box(d)) > .05) add('error', 'chips overlap', `"${name(c)}" and "${name(d)}"`); }));
+  for (const o of overlays) for (const k of [...caption, ...chips]) if (overlap(box(o), box(k)) > .05) add('error', 'caption or chip hides part of an overlay (move the overlay with `at`)', `"${name(k)}"`);
+  for (const k of [...caption, ...chips]) {
+    const r = box(k);
+    if (r.left < sb.left - 2 || r.right > sb.right + 2 || r.top < sb.top - 2 || r.bottom > sb.bottom + 2) add('error', 'text off the stage', `"${name(k)}"`);
+    if (k.scrollWidth > k.clientWidth + 2 && getComputedStyle(k).overflow !== 'visible') add('error', 'text cut off', `"${name(k)}"`);
+    if (overlap(r, cam) > .05) add('warn', 'Loom spot covers text', `"${name(k)}"`);
+  }
+  return out;
+};
 window.__styles = STYLE_IDS;
 window.__tempos = TEMPO_IDS;
 window.__timeline = () => ({style: styleId, tempo: tempoId, duration: DUR, intro: +INTRO_END.toFixed(3), outro: +OUTRO.toFixed(3),

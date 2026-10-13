@@ -4,6 +4,7 @@
   music_beds.py --duration 36 --intro-end 4.6 --out music_choices music_src/a.mp3 music_src/b.mp3
   music_beds.py --duration 36 --intro-end 4.6 --out music_choices music_src/a.mp3@12.5   # force an offset
   music_beds.py --measure-only music_src/*.mp3                                           # table only
+  music_beds.py --style paper --tempo steady --duration 36 --intro-end 4.6 --out music_choices   # shortlist picks
 
 For each track it finds the biggest lift (the 4 s after a moment against the 4 s before it) that still leaves
 room for the whole demo, sets the offset so that lift lands on chapter 1 (--intro-end, from render.mjs
@@ -12,9 +13,11 @@ A lift under 3 dB means the track is flat; the bed then starts at the track's be
 It also prints a rough pulse: the beat period found by autocorrelation and how regular it is (0–1).
 You can't hear the beds, so hand the folder to the user and mux only the one they pick:
   add_music.py --track <track> --offset <offset> --duration … --page-out page/music.m4a --video-in … --video-out …
+With --style/--tempo and no tracks, it takes the best matches from the shortlist in references/music.md (tracks
+the maintainer has heard first), downloads them into --src (default music_src) and builds their beds.
 Needs ffmpeg.
 """
-import argparse, math, os, subprocess, sys
+import argparse, math, os, re, subprocess, sys, urllib.parse, urllib.request
 from array import array
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
@@ -75,15 +78,50 @@ def pulse(frames, start, duration):
     return bpm, best
 
 
+def shortlist(style, tempo, count, src):
+    # Rows of the Shortlist table: Mood | Suits | Track | Source | Heard.
+    text = open(os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "references", "music.md")).read()
+    rows = [[c.strip() for c in line.strip("|").split("|")] for line in text.split("## Shortlist")[1].split("\n## ")[0].splitlines()
+            if line.startswith("|") and not line.startswith("| Mood") and not line.startswith("| ---")]
+    scored = []
+    for mood, suits, track, source, heard in rows:
+        score = 2 * bool(tempo and tempo in suits) + bool(style and style in suits)
+        if score:
+            scored.append((score + (0 if heard.startswith("not") else 1), track, source))
+    os.makedirs(src, exist_ok=True)
+    paths = []
+    for _, track, source in sorted(scored, reverse=True)[:count]:
+        title = track.split(",")[0].strip()
+        mixkit = re.match(r"Mixkit (\d+)", source)
+        url = (f"https://assets.mixkit.co/music/{mixkit[1]}/{mixkit[1]}.mp3" if mixkit else
+               "https://incompetech.com/music/royalty-free/mp3-royaltyfree/" + urllib.parse.quote(title + ".mp3"))
+        path = os.path.join(src, re.sub(r"[^a-z0-9]+", "-", title.lower()).strip("-") + ".mp3")
+        if not os.path.exists(path):
+            req = urllib.request.Request(url, headers={"User-Agent": "Mozilla/5.0 (Macintosh) AppleWebKit/537.36 Chrome/126 Safari/537.36"})
+            with urllib.request.urlopen(req, timeout=60) as r, open(path, "wb") as f:
+                f.write(r.read())
+        print(f"picked {title} ({source})")
+        paths.append(path)
+    return paths
+
+
 def main():
     ap = argparse.ArgumentParser()
-    ap.add_argument("tracks", nargs="+", help="audio files; add @seconds to force an offset")
+    ap.add_argument("tracks", nargs="*", help="audio files; add @seconds to force an offset")
+    ap.add_argument("--style")
+    ap.add_argument("--tempo")
+    ap.add_argument("--count", type=int, default=4)
+    ap.add_argument("--src", default="music_src", help="download folder for --style/--tempo picks")
     ap.add_argument("--duration", type=float, default=45, help="page duration from render.mjs --timeline")
     ap.add_argument("--intro-end", type=float, default=5.4, help="chapter 1 start from render.mjs --timeline")
     ap.add_argument("--out", help="folder for the beds")
     ap.add_argument("--measure-only", action="store_true")
     ap.add_argument("--lufs", type=float, default=-20)
     a = ap.parse_args()
+    if not a.tracks:
+        if not (a.style or a.tempo):
+            raise SystemExit("give tracks, or --style/--tempo to pick from the shortlist")
+        a.tracks = shortlist(a.style, a.tempo, a.count, a.src)
     if not a.measure_only and not a.out:
         raise SystemExit("--out is required unless --measure-only")
     if a.out:

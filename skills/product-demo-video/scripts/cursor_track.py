@@ -7,7 +7,8 @@
 Compares each sample with the one before it. A small changed area is taken as the cursor; a large one is a UI
 change and is skipped. When nothing moves, the last position is held for up to 2 s. Writes
 <out>/<clip name>.json with samples [clipTime, fx, fy, "seen" | "held"] (fx, fy are 0-1 inside the clip, or
-null when unknown) and prints a one-line summary per clip. It's a check, not a tracker: a spinner or a
+null when unknown) and changes [clipTime, x0, y0, x1, y1] (the box around everything that changed since the
+previous sample), and prints a one-line summary per clip. render.mjs --auto-cams reads both. It's a check, not a tracker: a spinner or a
 playing video next to the cursor can fool it, so read flagged times on a still before trusting them.
 Needs ffmpeg and Pillow.
 """
@@ -31,7 +32,7 @@ def trace(path, fps):
     w, h = size(path)
     proc = subprocess.Popen(["ffmpeg", "-v", "error", "-i", path, "-vf", f"fps={fps},scale={w}:{h},format=gray",
                              "-f", "rawvideo", "-"], stdout=subprocess.PIPE)
-    samples, prev, last, last_t, i = [], None, None, None, 0
+    samples, changes, prev, last, last_t, i = [], [], None, None, None, 0
     while True:
         raw = proc.stdout.read(w * h)
         if len(raw) < w * h:
@@ -40,6 +41,8 @@ def trace(path, fps):
         i += 1
         if prev is not None:
             box = ImageChops.difference(frame, prev).point(CHANGED).getbbox()
+            if box:
+                changes.append([t, round(box[0] / w, 3), round(box[1] / h, 3), round(box[2] / w, 3), round(box[3] / h, 3)])
             if box and box[2] - box[0] < w * SMALL and box[3] - box[1] < h * SMALL:
                 last, last_t = ((box[0] + box[2]) / 2 / w, (box[1] + box[3]) / 2 / h), t
                 samples.append([t, round(last[0], 3), round(last[1], 3), "seen"])
@@ -49,7 +52,7 @@ def trace(path, fps):
                 samples.append([t, None, None, "unknown"])
         prev = frame
     proc.wait()
-    return samples
+    return samples, changes
 
 
 def main():
@@ -61,9 +64,9 @@ def main():
     os.makedirs(a.out, exist_ok=True)
     for clip in a.clips:
         name = os.path.splitext(os.path.basename(clip))[0]
-        samples = trace(clip, a.fps)
+        samples, changes = trace(clip, a.fps)
         with open(os.path.join(a.out, name + ".json"), "w") as f:
-            json.dump({"clip": os.path.basename(clip), "fps": a.fps, "samples": samples}, f)
+            json.dump({"clip": os.path.basename(clip), "fps": a.fps, "samples": samples, "changes": changes}, f)
         seen = sum(s[3] == "seen" for s in samples)
         print(f"{name}: {len(samples)} samples, cursor seen in {seen}, held in {sum(s[3] == 'held' for s in samples)}")
 
