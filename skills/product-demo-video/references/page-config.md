@@ -55,6 +55,8 @@ the captions are never covered.
 - `fx, fy` are the focus point as fractions of the clip (0–1). Read them off a `contact_sheet.py --grid` sheet.
   The view is clamped so it never shows past the clip's edge.
 - Each chapter starts zoomed out, and the camera returns to scale 1 for the outro.
+- Aim the camera where the cursor is working, not where the layout looks interesting. `cursor_track.py` traces
+  the cursor in the cut clips, and `render.mjs --check-cams work/cursor` lists every moment it leaves the view.
 - In Pop, the recording may be cropped to fill the panel. The camera never zooms out past that, so `fx`, `fy`
   also choose which part of the clip shows.
 

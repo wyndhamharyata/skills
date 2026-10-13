@@ -626,6 +626,14 @@ function setCap(capEl, t, tIn, tOut) {
   });
 }
 
+function camAt(t) {
+  let s = 1, fx = .5, fy = .5;
+  for (const k of KF) { if (t < k.g) break; const p = easeIO(clamp((t - k.g) / k.d)); s += (k.s - s) * p; fx += (k.fx - fx) * p; fy += (k.fy - fy) * p; }
+  if (MODE === 'fill') s = Math.max(s, L.w / V.w, L.h / V.h);
+  const pos = (lens, size, f) => size <= lens ? (lens - size) / 2 : Math.min(0, Math.max(lens - size, lens / 2 - f * size));
+  return {s, x: pos(L.w, V.w * s, fx), y: pos(L.h, V.h * s, fy)};
+}
+
 function apply(t) {
   const S = STYLES[styleId], ti = t / TP.intro;
   $('black').style.opacity = 1 - ramp(t, 0, .6);
@@ -637,11 +645,8 @@ function apply(t) {
   const main = easeOut(ramp(ti, IE - .5, .8));
   for (const id of ['brand', 'steps', 'under', 'over']) $(id).style.opacity = main;
 
-  let s = 1, fx = .5, fy = .5;
-  for (const k of KF) { if (t < k.g) break; const p = easeIO(clamp((t - k.g) / k.d)); s += (k.s - s) * p; fx += (k.fx - fx) * p; fy += (k.fy - fy) * p; }
-  if (MODE === 'fill') s = Math.max(s, L.w / V.w, L.h / V.h);
-  const pos = (lens, size, f) => size <= lens ? (lens - size) / 2 : Math.min(0, Math.max(lens - size, lens / 2 - f * size));
-  $('zoom').style.transform = `translate(${pos(L.w, V.w * s, fx)}px,${pos(L.h, V.h * s, fy)}px) scale(${s})`;
+  const cam = camAt(t);
+  $('zoom').style.transform = `translate(${cam.x}px,${cam.y}px) scale(${cam.s})`;
 
   const rise = 180 * (1 - easeOut(ramp(ti, IE - .7, 1.2)));
   let wo = ramp(ti, IE - .7, .7), ws = 1, wy = rise;
@@ -785,6 +790,15 @@ if (q.has('render')) {
     .then(() => seekAll(0)).then(() => { ready = true; show(); });
 }
 window.__ready = () => ready;
+// What part of the chapter clip is on screen at page time t, as fractions of the clip (for render.mjs --check-cams).
+window.__view = time => {
+  const ch = CHAPTERS.find(c => time >= c.g0 && time < c.g1);
+  if (!ch) return null;
+  const {s, x, y} = camAt(time), w = V.w * s, h = V.h * s;
+  const overlay = OVERLAYS.some(o => o.ch === ch && time < o.gOut);
+  return {chapter: ch.label, clip: ch.clip, c: clipAt(ch.segs, time).c, overlay,
+    x0: clamp(-x / w), x1: clamp((L.w - x) / w), y0: clamp(-y / h), y1: clamp((L.h - y) / h)};
+};
 window.__styles = STYLE_IDS;
 window.__tempos = TEMPO_IDS;
 window.__timeline = () => ({style: styleId, tempo: tempoId, duration: DUR, intro: +INTRO_END.toFixed(3), outro: +OUTRO.toFixed(3),

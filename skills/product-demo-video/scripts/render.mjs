@@ -5,6 +5,7 @@
 //   node render.mjs page/index.html --stills 9,20 --style all      # every style, labelled, plus one sheet per moment
 //   node render.mjs page/index.html --timeline --tempo fast        # chapter times for a tempo
 //   node render.mjs page/index.html --stills 9 --cam               # show the Loom camera spot in stills
+//   node render.mjs page/index.html --check-cams ../work/cursor    # times the cursor is outside the camera view
 //
 // --style and --tempo override the config (styles: midnight paper aurora keynote swiss pop terminal;
 // tempos: calm steady brisk fast). Run it from a directory where `npm i playwright-core` has been done
@@ -79,6 +80,34 @@ async function open(style, render) {
 }
 
 const info = await open(STYLE === 'all' ? null : STYLE);
+if (argv.includes('--check-cams')) {
+  // Cursor traces come from cursor_track.py: <dir>/<clip name>.json, one per chapter clip, in clip time.
+  const dir = path.resolve(opt('--check-cams'));
+  const traces = {};
+  for (const f of fs.existsSync(dir) ? fs.readdirSync(dir) : []) if (f.endsWith('.json')) traces[f.slice(0, -5)] = JSON.parse(fs.readFileSync(path.join(dir, f), 'utf8'));
+  if (!Object.keys(traces).length) throw new Error(`no cursor traces in ${dir}; run cursor_track.py first`);
+  const near = (tr, c) => { let best = null; for (const p of tr.samples) if (p[1] !== null && Math.abs(p[0] - c) <= .3 && (!best || Math.abs(p[0] - c) < Math.abs(best[0] - c))) best = p; return best; };
+  const MARGIN = .03, issues = [];
+  for (let t = info.timeline.intro; t < info.timeline.outro; t += .2) {
+    const v = await page.evaluate(x => window.__view(x), t);
+    const tr = v && traces[path.basename(v.clip).replace(/\.[^.]+$/, '')];
+    if (!v || !tr || v.overlay) continue;
+    const p = near(tr, v.c);
+    if (!p) continue;
+    const [, fx, fy] = p;
+    const out = fx < v.x0 || fx > v.x1 || fy < v.y0 || fy > v.y1;
+    const edge = !out && (fx < v.x0 + MARGIN || fx > v.x1 - MARGIN || fy < v.y0 + MARGIN || fy > v.y1 - MARGIN);
+    if (!out && !edge) continue;
+    const last = issues[issues.length - 1], kind = out ? 'OUTSIDE' : 'edge';
+    if (last && last.chapter === v.chapter && last.kind === kind && t - last.t1 < .45) { last.t1 = t; last.c1 = v.c; continue; }
+    issues.push({chapter: v.chapter, kind, t0: t, t1: t, c0: v.c, c1: v.c, at: `${fx.toFixed(2)},${fy.toFixed(2)}`,
+      view: `x ${v.x0.toFixed(2)}–${v.x1.toFixed(2)}, y ${v.y0.toFixed(2)}–${v.y1.toFixed(2)}`});
+  }
+  if (!issues.length) console.log('cursor stays inside the camera view');
+  for (const i of issues) console.log(`${i.kind.padEnd(8)} ${i.chapter.padEnd(12)} clip ${i.c0.toFixed(2)}–${i.c1.toFixed(2)} (page ${i.t0.toFixed(1)}–${i.t1.toFixed(1)})  cursor ${i.at}  view ${i.view}`);
+  await browser.close();
+  process.exit(0);
+}
 if (argv.includes('--timeline')) {
   const tl = info.timeline;
   console.log(`style ${tl.style} · tempo ${tl.tempo}`);
