@@ -1,0 +1,19 @@
+{
+  "name": "wyndham-skills",
+  "description": "Wyndham's agent skills",
+  "owner": {
+    "name": "Wyndham Haryata",
+    "url": "https://github.com/wyndhamharyata"
+  },
+  "plugins": [
+    {
+      "name": "product-demo-video",
+      "description": "Turn a screen recording into an auto-playing product demo page to narrate in Loom, plus a rendered MP4 with music.",
+      "source": "./",
+      "strict": false,
+      "skills": [
+        "./skills/product-demo-video"
+      ]
+    }
+  ]
+}

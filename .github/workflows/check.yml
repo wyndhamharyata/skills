@@ -1,0 +1,14 @@
+name: check
+on: [push, pull_request]
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Skills are valid and generated files are up to date
+        run: python3 tools/catalog.py --check
+      - name: Install script works
+        run: |
+          bash -n install.sh
+          HOME="$(mktemp -d)" ./install.sh --no-check
+          HOME="$(mktemp -d)" ./install.sh --copy --no-check --agent pi
