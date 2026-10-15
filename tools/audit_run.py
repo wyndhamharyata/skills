@@ -32,7 +32,7 @@ FRAME_RE = re.compile(r"ffmpeg.*(-frames:v\s+1\b|-vframes\s+1\b)")
 CONFIG_SHELL = re.compile(r"(sed\s+-i|perl\s+-\w*i)\b[^;&|]*?demo\.config\.js|>\s*\S*demo\.config\.js")
 CONFIG_PY = re.compile(r"['\"][^'\"\s]*demo\.config\.js['\"][\s\S]*(write_text|\.write\()")
 MULTI_CHAPTER = re.compile(r"chapters\s*\d|\bch(apter)?s?\s*\d+\s*[-–,&+]\s*\d|\w\s*\+\s*\w", re.I)
-BLOCKED = ("demo.py prints", "Not on this step's list", "Don't grab single frames", "is generated. Edit work/chapters")
+BLOCKED = ("demo.py prints", "Not on this step's list", "Don't grab single frames", "is generated. Edit work/chapters", "Don't crop, zoom or sample")
 CC_TOOLS = {"Bash": "shell", "Read": "read", "Write": "write", "Edit": "edit", "MultiEdit": "edit", "Grep": "grep",
             "Glob": "glob", "AskUserQuestion": "question", "Task": "subagent", "Agent": "subagent", "Skill": "skill"}
 

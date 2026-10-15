@@ -8,6 +8,7 @@ prints exactly what to do next: images to look at, a question to ask, helpers to
   demo.py build <project> [--style pop --tempo fast --music auto|choose|none]
   demo.py check <project> <chapter>         # stills helpers: rebuild, check and re-render one chapter
   demo.py sheet <project> <clip> --times 1.2,1.6   # chapter helpers: one extra sheet of their clip
+  demo.py still <project> <page time>       # stills helpers: one moment of the page at full size
   demo.py finish <project> [--bed <name>] [--note "worth checking: …"]
   demo.py next [<project>]                  # where a run stands, and the command to run
 
@@ -458,7 +459,8 @@ def cmd_cut(a):
     print("intro cut-outs: " + (f"automatic, {cut_sheet}" if not cut_brief else "need a helper (no repeated items found)"))
     prompts = [f'"Read {b} and do exactly what it says."' for b in briefs]
     nxt(f"1. LOOK at {W(project, 'sheets', 'preview.jpg')}: one row per clip (start, middle, end). Each row should be the app"
-        " showing that chapter's action, with no popup or other window.",
+        " showing that chapter's action, with no popup or other window. To see one clip larger, run"
+        f" python3 {ME} sheet {project} <clip> --times 1,3,5 (don't crop the preview).",
         "2a. If every row is right, in ONE turn start one helper per chapter, all at once, each with this one-line prompt:",
         *[f"     {p}" for p in prompts],
         *([f"     and one more in the background (don't wait for it): \"Read {cut_brief} and do exactly what it says.\""] if cut_brief else []),
@@ -539,6 +541,20 @@ def cmd_sheet(a):
     py("contact_sheet.py", clip, "--times", a.times, "--width", 520, "--out", f)
     st = load(project)   # other helpers may have saved in between
     st["rounds"][f"sheet-{a.clip}"] = k + 1
+    save(project, st, look=st.get("look", []) + [f])
+    print(f"LOOK at {f}")
+
+
+def cmd_still(a):
+    project = project_arg(a.project)
+    st = load(project)
+    k = st["rounds"].get("still", 0)
+    if k >= 12:
+        die("Enough extra stills for this demo. Decide from what you've seen, or report it as uncertain.")
+    out = node(project, "--stills", f"{float(a.time):.2f}", "--stills-dir", W(project, "stills", "extra"))
+    f = W(project, "stills", "extra", f"t_{float(a.time):06.2f}.jpg")
+    st = load(project)
+    st["rounds"]["still"] = k + 1
     save(project, st, look=st.get("look", []) + [f])
     print(f"LOOK at {f}")
 
@@ -712,6 +728,22 @@ def cmd_build(a):
                                  "--duration", str(tl["duration"]), "--intro-end", str(tl["intro"]), "--out", "music_choices",
                                  "--src", "music_src"], cwd=project, stdout=log, stderr=subprocess.STDOUT, start_new_session=True)
         st["music_started"] = {"pid": proc.pid, "tempo": page["tempo"], "duration": tl["duration"]}
+    # One stills round; after it, only chapters changed since their check get a helper again, once.
+    rnd = st.get("stills_round", 0)
+    todo = list(range(len(page["chapters"])))
+    if rnd:
+        todo = [i for i, c in enumerate(page["chapters"]) if chapter_hash(project, c) != st.get("stills_hash", {}).get(c)]
+        if not todo or rnd >= 2:
+            if fixes:
+                st["open_issues"] = fixes
+            save(project, st, step="styled", look=[])
+            nxt("The stills check is done" + ("" if not todo else " (its rounds are used up)") + ". Run:",
+                f"  python3 {ME} finish {project}" + ('  --note "…" for anything a helper reported as still wrong' if not fixes else ""))
+            return
+        for i in todo:
+            st["rounds"].pop(f"check-{i + 1}", None)
+    st["stills_round"] = rnd + 1
+    st.setdefault("stills_hash", {}).update({c: chapter_hash(project, c) for c in page["chapters"]})
     stills = W(project, "stills")
     shutil.rmtree(stills, ignore_errors=True)
     node(project, "--stills", "auto", "--stills-dir", stills)
@@ -720,12 +752,14 @@ def cmd_build(a):
     chapter_sheets = [s for s in sheets if s not in intro]
     briefs = []
     for i, s in enumerate(chapter_sheets):
+        if i not in todo:
+            continue
         clip = page["chapters"][i]
         f = W(project, "briefs", f"stills-{i + 1}.md")
         with open(f, "w") as fh:
             fh.write(stills_brief(project, page, i + 1, clip, s, rjson(W(project, "plan.json"))))
         briefs.append(f)
-    save(project, st, step="styled", look=intro + chapter_sheets)
+    save(project, st, step="styled", look=intro + [chapter_sheets[i] for i in todo if i < len(chapter_sheets)])
     if fixes:
         print("Fix rounds used up; these go into the hand-over as 'worth checking':")
         st["open_issues"] = fixes
@@ -734,6 +768,12 @@ def cmd_build(a):
         *[f'  - start a helper with: "Read {b} and do exactly what it says."' for b in briefs],
         f"  - LOOK yourself at {' '.join(intro)} (intro and outro). If the intro or outro text is wrong, change work/page.json.",
         f"When the helpers are back, run: python3 {ME} finish {project}  (add --note \"…\" for anything a helper reported as still wrong).")
+
+
+def chapter_hash(project, clip):
+    d = rjson(W(project, "chapters", clip + ".json"), {})
+    d.pop("auto_cams", None)
+    return hashlib.sha1(json.dumps(d, sort_keys=True).encode()).hexdigest()[:12]
 
 
 def stills_brief(project, page, n, clip, sheet, plan):
@@ -759,6 +799,10 @@ This chapter shows: {c['shows']}. {inset_note(plan, c)}
    Then run once: python3 {ME} check {project} {n}
    and look at the sheet it prints. You get one fix round: if something is still wrong after it, report it.
 4. Reply in at most 5 lines: "OK", or "fixed: …", or "still wrong: page <t>: <problem>".
+
+Limits: at most 8 tool calls in all. No image processing (cropping, zooming, sampling pixels): if the sheet
+doesn't settle a question, run `python3 {ME} still {project} <page time>` (at most twice) and look at that
+full-size still; if you still can't tell, report it as uncertain instead of investigating.
 """
 
 
@@ -780,6 +824,7 @@ def cmd_check(a):
     sheet = next((l.split()[0] for l in out.splitlines() if l.strip().endswith("moments)")), None)
     st = load(project)
     st["rounds"][f"check-{i}"] = k + 1
+    st.setdefault("stills_hash", {})[clip] = chapter_hash(project, clip)
     save(project, st, look=st.get("look", []) + ([sheet] if sheet else []))
     tl = timeline(project)
     g = next(((c[1], c[2]) for j, c in enumerate(tl["chapters"]) if j == i - 1), (0, 1e9))
@@ -906,10 +951,11 @@ def main():
     p.add_argument("--music", choices=["auto", "choose", "none"])
     p = sub.add_parser("check"); p.add_argument("project"); p.add_argument("chapter")
     p = sub.add_parser("sheet"); p.add_argument("project"); p.add_argument("clip"); p.add_argument("--times", required=True)
+    p = sub.add_parser("still"); p.add_argument("project"); p.add_argument("time")
     p = sub.add_parser("finish"); p.add_argument("project", nargs="?"); p.add_argument("--bed"); p.add_argument("--note", action="append")
     p.add_argument("--force", action="store_true")
     a = ap.parse_args()
-    {"new": cmd_new, "plan": cmd_plan, "cut": cmd_cut, "build": cmd_build, "check": cmd_check, "sheet": cmd_sheet,
+    {"new": cmd_new, "plan": cmd_plan, "cut": cmd_cut, "build": cmd_build, "check": cmd_check, "sheet": cmd_sheet, "still": cmd_still,
      "finish": cmd_finish, "next": cmd_next}[a.cmd](a)
 
 

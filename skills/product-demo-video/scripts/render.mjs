@@ -158,52 +158,85 @@ async function autoCams(traces) {
     const mine = claims.filter(c => clipName(c.clip) === clipName(ch.clip));
     if (!traces[clipName(ch.clip)] && !mine.length) { out.push({label: ch.label, clip: ch.clip, cams: null}); continue; }
     const safe = await page.evaluate(i => window.__safeArea(i), ci);
+    // Windows in timeline order, each with its steady-tempo start time (sT) so moves can be spaced out.
     const wins = [], holdLen = {};
+    let sT = 0;
     for (const st of ch.steps) {
-      if (st[0] === 'hold') { wins.push({c0: st[1] - .3, c1: st[1] + .3, at: st[1], off: 0, hold: true}); holdLen[st[1]] = st[2]; continue; }
-      const [, a, b, rate = 1] = st, n = Math.max(1, Math.round((b - a) / (2 * rate)));
+      if (st[0] === 'hold') { wins.push({c0: st[1] - .3, c1: st[1] + .3, at: st[1], off: 0, hold: true, sT}); holdLen[st[1]] = st[2]; sT += st[2]; continue; }
+      const [, a, b, rate = 1] = st, n = Math.max(1, Math.round((b - a) / (1.2 * rate)));
       for (let k = 0; k < n; k++) {
         const c0 = a + (b - a) * k / n;
-        wins.push({c0, c1: a + (b - a) * (k + 1) / n, at: k ? +c0.toFixed(2) : a, off: k ? -.3 : (holdLen[a] ?? 0) - .3});
+        wins.push({c0, c1: a + (b - a) * (k + 1) / n, at: k ? +c0.toFixed(2) : a, off: k ? -.3 : (holdLen[a] ?? 0) - .3, sT: sT + (b - a) / rate * k / n});
       }
+      sT += (b - a) / rate;
     }
+    // 1. What each window wants to show: during a hold (or when nobody moves) the claim, with the last click if it
+    //    fits; while the cursor works, the cursor and what changes around it (claims join when everything fits).
+    const union = list => [Math.min(...list.map(b => b[0])), Math.min(...list.map(b => b[1])), Math.max(...list.map(b => b[2])), Math.max(...list.map(b => b[3]))];
+    const pad = (b, k) => [b[0] - k, b[1] - k, b[2] + k, b[3] + k];
+    const fits = (u, f) => (u[2] - u[0]) * f.S / lw <= (safe[2] - safe[0]) + .02 && (u[3] - u[1]) * f.S / lh <= (safe[3] - safe[1]) + .02;
+    const wants = wins.map((w, i) => {
+      const said = mine.filter(c => w.hold ? Math.abs(c.t - w.at) <= .35 : c.t >= w.c0 - .1 && c.t < w.c1);
+      const inWin = tr.samples.filter(p => p[1] !== null && p[0] >= w.c0 - .2 && p[0] <= w.c1 + .2);
+      const boxes = (tr.changes || []).filter(b => b[0] >= w.c0 && b[0] <= w.c1 && (b[3] - b[1]) * (b[4] - b[2]) < .5).map(b => b.slice(1));
+      const big = (tr.changes || []).some(b => b[0] >= w.c0 && b[0] <= w.c1 && (b[3] - b[1]) * (b[4] - b[2]) >= .5);
+      const moving = inWin.filter(p => p[3] === 'seen').map(p => [p[1], p[2], p[1], p[2]]);
+      const claim = said.length ? pad(union(said.map(c => c.box)), .03) : null;
+      let box = null, kind = 'action';
+      if (claim && (w.hold || !moving.length)) {
+        kind = 'claim';
+        const last = inWin.filter(p => p[0] <= w.c0 + .05).slice(-1).map(p => [p[1], p[2], p[1], p[2]]);
+        box = last.length && fits(pad(union([claim, ...last]), .03), frameBox(pad(union([claim, ...last]), .03), safe, .3, .22)) ? pad(union([claim, ...last]), .03) : claim;
+      } else if (moving.length && !big) {
+        box = pad(union([...moving, ...boxes]), .06);
+        if (claim) {
+          // The claim and the action together if they fit; if not, the claim gets this window (long enough to read)
+          // and the camera goes back to the cursor in the next one.
+          const all = union([box, claim]);
+          if (fits(all, frameBox(all, safe, .3, .22))) box = all;
+          else { box = claim; kind = 'claim'; }
+        }
+      } else if (big) kind = 'wide';
+      else if (boxes.length) box = pad(union(boxes), .06);
+      else if (inWin.length) box = pad(union(inWin.map(p => [p[1], p[2], p[1], p[2]])), .06);
+      return {w, i, said, box, kind, moving: moving.length};
+    }).filter(x => x.box || x.kind === 'wide');
+
+    // 2. Grow one framing over consecutive windows while their combined area still fits without zooming out much;
+    //    start a new one only when it doesn't. Moves then come when the action goes somewhere else, never back and
+    //    forth within a second.
+    const segs = [];
+    for (const x of wants) {
+      const c = segs[segs.length - 1];
+      if (c && c.kind === 'wide' && x.kind === 'wide') continue;
+      if (c && c.kind !== 'wide' && x.kind !== 'wide') {
+        const u = union([c.box, x.box]), f = frameBox(u, safe, .2, .2);
+        if (f.S >= Math.min(c.f.S, frameBox(x.box, safe, .2, .2).S) * .85 && fits(u, f)) { c.box = u; c.f = f; if (x.kind === 'claim' && !c.said.length) c.said = x.said; continue; }
+        // Too soon after the last move: between two action framings, wait for the next window; a claim replaces an
+        // action framing; the cursor starting to work always gets its move.
+        if (x.w.sT - c.w.sT < 1.1 && x.kind === 'action' && c.kind === 'action') continue;
+        if (x.w.sT - c.w.sT < 1.1 && x.kind === 'claim' && c.kind === 'action') segs.pop();
+      }
+      segs.push({...x, f: x.box ? frameBox(x.box, safe, .2, .2) : {S: base, fx: .5, fy: .5}});
+    }
+
+    // 3. One move per framing, landing at its start (a claim's framing lands just before the claim's moment).
     const cams = [];
     let cur = {S: base, fx: .5, fy: .5};
-    wins.forEach((w, i) => {
-      const said = mine.filter(c => w.hold ? Math.abs(c.t - w.at) <= .35 : c.t >= w.c0 - .1 && c.t < w.c1);
-      // A moving cursor is the action; a parked one only counts when nothing else changes.
-      const inWin = tr.samples.filter(p => p[1] !== null && p[0] >= w.c0 - .2 && p[0] <= w.c1 + .2);
-      const boxes = (tr.changes || []).filter(b => b[0] >= w.c0 && b[0] <= w.c1 && (b[3] - b[1]) * (b[4] - b[2]) < .5);
-      const big = (tr.changes || []).some(b => b[0] >= w.c0 && b[0] <= w.c1 && (b[3] - b[1]) * (b[4] - b[2]) >= .5);
-      const moving = inWin.filter(p => p[3] === 'seen'), pts = moving.length || boxes.length ? moving : inWin;
-      const mid = list => list.length ? list.reduce((a, p) => a + p, 0) / list.length : .5;
-      let t;
-      const union = list => [Math.min(...list.map(b => b[0])) - .03, Math.min(...list.map(b => b[1])) - .03,
-        Math.max(...list.map(b => b[2])) + .03, Math.max(...list.map(b => b[3])) + .03];
+    for (const sg of segs) {
+      const t = sg.kind === 'wide' ? {S: base, fx: cur.fx, fy: cur.fy} : frameBox(sg.box, safe, sg.kind === 'claim' ? .3 : .2, sg.kind === 'claim' ? .22 : .2);
+      if (t.S <= 1.001 && cur.S <= 1.001) continue;
+      if (Math.abs(t.S - cur.S) < .15 && Math.abs(t.fx - cur.fx) < .08 && Math.abs(t.fy - cur.fy) < .08) continue;
+      const {w, i, said} = sg;
       let at = w.at, off = i === 0 ? 0 : w.off, ease = w.hold ? .6 : .8;
-      if (said.length) {
-        // The claim plus the action around it; when both don't fit (Pop crops the clip), the claim wins, since the
-        // caption talks about it. The move lands just before the claim's moment.
-        const all = [...said.map(c => c.box), ...moving.map(p => [p[1], p[2], p[1], p[2]]), ...boxes.map(b => b.slice(1))];
-        t = frameBox(union(all), safe, .3, .22);
-        const u = union(all);
-        if ((u[2] - u[0]) * t.S / lw > (safe[2] - safe[0]) + .02 || (u[3] - u[1]) * t.S / lh > (safe[3] - safe[1]) + .02)
-          t = frameBox(union(said.map(c => c.box)), safe, .3, .22);
+      if (sg.kind === 'claim' && said.length) {
         at = w.hold ? w.at : +Math.min(...said.map(c => c.t)).toFixed(2);
         ease = .6;
         off = i === 0 && at === w.at ? 0 : -(ease + .1);
-      } else if (big) t = {S: base, fx: mid(pts.map(p => p[1])), fy: mid(pts.map(p => p[2]))};   // most of the screen changes: as wide as the style allows
-      else if (pts.length || boxes.length) {
-        let x0 = 1, y0 = 1, x1 = 0, y1 = 0;
-        for (const p of pts) { x0 = Math.min(x0, p[1]); x1 = Math.max(x1, p[1]); y0 = Math.min(y0, p[2]); y1 = Math.max(y1, p[2]); }
-        for (const b of boxes) { x0 = Math.min(x0, b[1]); y0 = Math.min(y0, b[2]); x1 = Math.max(x1, b[3]); y1 = Math.max(y1, b[4]); }
-        t = frameBox([x0 - .06, y0 - .06, x1 + .06, y1 + .06], safe, .2, .2);
       }
-      if (!t || (t.S <= 1.001 && cur.S <= 1.001)) return;
-      if (Math.abs(t.S - cur.S) < .15 && Math.abs(t.fx - cur.fx) < .08 && Math.abs(t.fy - cur.fy) < .08) return;
       cams.push([at, +off.toFixed(2), +(1 + (t.S - 1) / geo.zoom).toFixed(2), +t.fx.toFixed(2), +t.fy.toFixed(2), ease]);
       cur = t;
-    });
+    }
     out.push({label: ch.label, clip: ch.clip, cams});
   }
   return out;

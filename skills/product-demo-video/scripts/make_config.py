@@ -37,8 +37,56 @@ def hand_edited(path):
     return bool(m) and fingerprint(text.split("\n", 2)[2]) != m[1]
 
 
+def normalise(name, ch, dur):
+    """Make the chapter's timeline valid: steps in order and joined end to end inside the clip, and every chip,
+    claim and cam time on it. Helpers' small slips (a chip before the first play, a hold 0.003 s past the end)
+    used to stop the page from loading."""
+    notes, end = [], round(dur - .02, 2)
+    steps, pos = [], None
+    for st in ch.get("steps") or [["hold", 0, .4], ["play", 0, end], ["hold", end, .8]]:
+        if st[0] == "hold":
+            c = round(min(max(st[1], 0), end), 2)
+            if pos is not None and c > pos + .01:
+                steps.append(["play", pos, c])
+                notes.append(f"{name}: added play {pos}-{c} to reach the hold at {c}")
+            elif pos is not None and abs(c - pos) > .01:
+                notes.append(f"{name}: hold at {st[1]} moved to {pos} (the clip had already passed it)")
+                c = pos
+            steps.append(["hold", c, st[2]])
+            pos = c
+        else:
+            a, b, rate = max(st[1], 0), min(st[2], end), (st[3] if len(st) > 3 else 1)
+            if pos is not None and abs(a - pos) > .01:
+                notes.append(f"{name}: play {st[1]}-{st[2]} now starts at {pos}, where the previous step ended")
+                a = pos
+            if b - a < .05:
+                continue
+            steps.append(["play", round(a, 2), round(b, 2)] + ([rate] if rate != 1 else []))
+            pos = round(b, 2)
+    start = steps[0][1]
+    plays = any(st[0] == "play" for st in steps)
+    holds = [st[1] for st in steps if st[0] == "hold"]
+
+    def fix(t, what):
+        v = min(max(t, start), pos - .01) if plays else min(holds, key=lambda h: abs(h - t))
+        v = round(v, 2)
+        if abs(v - t) > .005:
+            notes.append(f"{name}: {what} at {t} moved to {v} (outside the timeline {start}-{pos})")
+        return v
+    chips = [[fix(k[0], f'chip "{k[2]}"'), *k[1:3]] + ([min(k[3], pos)] if len(k) > 3 else []) for k in ch.get("chips", [])]
+    claims = [[text, fix(t, f'claim "{text}"')] for text, t in ch.get("claims", [])]
+    cams = [[fix(k[0], "cam"), *k[1:]] for k in (ch.get("cams") or ch.get("auto_cams") or [])]
+    return steps, chips, claims, cams, notes
+
+
 def clip_seconds(clip):
     return round(sum((b - a) / r for a, b, r in clip["segments"]), 3)
+
+
+def probe_seconds(path):
+    import subprocess
+    return float(subprocess.run(["ffprobe", "-v", "error", "-show_entries", "format=duration", "-of", "csv=p=0", path],
+                                capture_output=True, text=True).stdout.strip() or 0)
 
 
 def aspect(cfg, clip):
@@ -65,14 +113,16 @@ def main():
         ch = json.load(open(path)) if os.path.exists(path) else {}
         if not ch:
             problems.append(f"{name}: no work/chapters/{name}.json, so its caption is a placeholder")
-        dur = clip_seconds(clip)
-        steps = ch.get("steps") or [["hold", 0, .4], ["play", 0, dur], ["hold", dur, .8]]
+        mp4 = os.path.join(out_dir, name + ".mp4")
+        dur = probe_seconds(mp4) if os.path.exists(mp4) else clip_seconds(clip)
+        steps, chips, claims_, cams, fixed = normalise(name, ch, dur)
+        problems += fixed
         fields = [f"label: {js(ch.get('label', name))}", f"title: {js(ch.get('title', 'TODO title'))}", f"clip: {js(name + '.mp4')}",
                   f"body: {js(ch.get('body', 'TODO body'))}", f"steps: {js(steps)}",
-                  f"cams: {js(ch.get('cams') or ch.get('auto_cams') or [])}",
-                  f"chips: {js(ch.get('chips', []))}"]
+                  f"cams: {js(cams)}",
+                  f"chips: {js(chips)}"]
         chapters.append("    {" + ",\n      ".join(fields) + "},")
-        for text, t in ch.get("claims", []):
+        for text, t in claims_:
             claims.append(f'- "{text}" -> {rel}/{name}.mp4 at {t}')
 
     overlays = []

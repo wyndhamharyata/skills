@@ -87,6 +87,10 @@ ASK_DEMO = "Not needed: demo.py prints the exact command for this step. Run: pyt
 NO_FRAMES = ("Don't grab single frames: demo.py made the sheets for this step (see `look` in work/state.json); "
              "a script check covers the rest.")
 NOT_LISTED = "Not on this step's list. Already checked by a script; trust its verdict. Images for this step: {images}"
+CROPPING = ("Don't crop, zoom or sample the sheets: each was made for this step, and a script checked the rest. To see one "
+            "moment larger, run: python3 {skill}/scripts/demo.py still {project} <page time> (or demo.py sheet {project} "
+            "<clip> --times … for a clip). Can't tell? Report it as uncertain.")
+TEMP = tuple(os.path.realpath(d) + os.sep for d in {"/tmp", "/var/folders", os.environ.get("TMPDIR") or "/tmp"})
 GENERATED = ("{name} is generated. Edit work/chapters/<clip>.json (caption, chips, steps, cams) or work/page.json "
              "(brand, style, tempo, intro, outro), then run: python3 {skill}/scripts/demo.py build {project}")
 
@@ -105,6 +109,9 @@ def check(tool, args, cwd, projects):
                 if inside(path, project) and path.lower().endswith(IMAGES) and not listed(path, state):
                     look = [str(p) for p in state.get("look") or []]
                     return NOT_LISTED.format(images=", ".join(look) or "none")
+            # Crops written to a temp folder are the same habit with a different path.
+            if path.lower().endswith(IMAGES) and real(path).startswith(TEMP) and not any(listed(path, st) for _, _, st in projects):
+                return CROPPING.format(skill=SKILL, project=pick(projects, path)[0])
     if tool in WRITE:
         for path in paths:
             for project, _, _ in projects:
@@ -267,6 +274,12 @@ def check_shell(command, cwd, projects):
     if (named and re.search(r"\b(" + "|".join(INTERPRETERS) + r")\d*(\.\d+)?\b", command)
             and re.search(r"writeFileSync|writeFile\(|\.write\(|write_text|open\([^)]*,\s*['\"][wa]", command)):
         return GENERATED.format(name=os.path.basename(named.group(0)), skill=SKILL, project=project[0])
+
+    # 6: cropping or pixel-sampling the step's sheets with Python, ImageMagick or sips
+    if (re.search(r"Image\.open|from PIL|import PIL|\bmagick\b|\bconvert\b|\bsips\b", command)
+            and re.search(r"sheet|stills|/work/|\.(jpe?g|png|webp)\b", command, re.I)
+            and not any(skill_script(t) for t in tokens)):
+        return CROPPING.format(skill=SKILL, project=project[0])
 
     for seg in segs:
         name, i = program(seg)

@@ -52,6 +52,17 @@ def trace(path, fps):
                 samples.append([t, None, None, "unknown"])
         prev = frame
     proc.wait()
+    # A small change that stays put for a second or more is a spinner or a blinking caret, not the cursor at work.
+    seen = [smp for smp in samples if smp[3] == "seen"]
+    i = 0
+    while i < len(seen):
+        j = i
+        while j + 1 < len(seen) and abs(seen[j + 1][1] - seen[i][1]) < .015 and abs(seen[j + 1][2] - seen[i][2]) < .015:
+            j += 1
+        if seen[j][0] - seen[i][0] >= 1.0:
+            for k in range(i, j + 1):
+                seen[k][3] = "held"
+        i = j + 1
     return samples, changes
 
 
